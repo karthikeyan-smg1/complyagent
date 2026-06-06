@@ -1,221 +1,176 @@
-# STATUS — 2026-06-06 (morning checkpoint)
+# STATUS — 2026-06-06 (afternoon checkpoint)
 
-> Cold-resume note. Read this before continuing. The two prior context documents
-> are **BRIEF.md** (scope, anti-goals, architecture) and **DECISIONS.md**
-> (why each load-bearing choice was made). This file is the ephemeral "what's
-> done, what's next, what's broken right now."
+> Cold-resume note. Read this before continuing. The two prior context
+> documents are **BRIEF.md** (scope, anti-goals, architecture) and
+> **DECISIONS.md** (why each load-bearing choice was made).
 
 ---
 
 ## TL;DR
 
-**Phase 1 (skateboard) is green.** The two-stage Gemini classifier ran
-end-to-end on three curated Visa bulletins and **agreed with the hand
-labels 3/3** — both mandatory bulletins (CIT/MIT/AFT, 3DS 2.3) classified
-as `relevant` with cited surfaces, and the marketing bulletin (Cross-Border
-Commerce Program) classified as `not_relevant` with the right reasoning.
+**v0 is shipped end-to-end.** Two-stage classifier + 10-bulletin Visa corpus
++ hand-labeled eval + multi-tab Streamlit dashboard, all pushed to
+`karthikeyan-smg1/complyagent`. **First clean eval: 10/10 — precision 1.000,
+recall 1.000, F1 1.000.**
 
-Total wall-clock: **~34 seconds** for 3 bulletins (6 Gemini calls). Run
-artifact: `outputs/skateboard-hyperswitch-20260606T031402Z.json`.
-
-**One blocker remains: the first git commit / push.** Xcode CLT license is
-still not accepted (Karthik to run the command in Terminal.app — see §6 below).
+**One remaining action lives with you (5 minutes in a browser):** connect the
+GitHub repo to Streamlit Community Cloud and click Deploy. After that the
+demo URL is live and resume-ready. Step-by-step at the bottom of this file.
 
 ---
 
-## What changed since the last STATUS
+## Repo state
 
-### 1. Found and fixed a 7-hour silent hang
+- **Live source:** https://github.com/karthikeyan-smg1/complyagent
+- **Latest commit:** `788589e Expanded corpus, eval, Streamlit dashboard,
+  rate limiter`
+- **History:** two commits, clean (the initial scaffold was force-pushed to
+  drop the API-probe debris from the first push).
 
-The first end-to-end run last night stalled for 7 hours with no progress
-output. Diagnosis after the fact: **Gemini 2.5 Pro free-tier limit is 0
-requests**. The API returns 429 `RESOURCE_EXHAUSTED` immediately, but the
-`retryDelay` hints in the response (`Please retry in 42s.`, `32s`, `22s`…)
-appear to drive the google-genai SDK into a multi-hour internal retry loop
-when no client-side timeout is set.
+### What's shipped
 
-**Two fixes shipped together:**
+- `tenants/hyperswitch/bulletins/` — 10 Visa bulletins:
+  - 5 mandatory/relevant: AFT (CIT/MIT), VTS network-token recurring
+    mandate, 3DS 2.3, VDRP dispute pre-arbitration evidence v4, India IRF
+    rate adjustment.
+  - 5 not-relevant: Cross-Border marketing program, Marketplace Operator
+    Settlement Reporting (out-of-scope role), stablecoin settlement pilot
+    (treasury-only), Click to Pay 2.0 (consumer UX, not orchestrator),
+    issuer-side card production refresh.
+  - All synthesized from public Visa programs with `synthesized: true`;
+    sourcing transparency in `tenants/hyperswitch/bulletins/README.md`.
+- `src/classify/classifier.py` — two-stage Gemini classifier, both stages
+  default to `gemini-2.5-flash-lite`. Env-overridable models. Pydantic
+  `response_schema` enforcement. Hard 60s HTTP timeout per call.
+  Token-bucket rate limiter (8 RPM default, env-overridable via
+  `COMPLY_GEMINI_RPM`). Server-`retryDelay`-aware retry backoff.
+- `src/eval/metrics.py` + `scripts/run_eval.py` — runs the classifier
+  across the full corpus, computes precision / recall / F1 / accuracy,
+  writes `outputs/eval-<ts>.json` + `outputs/latest-eval.json`,
+  regenerates `tenants/<slug>/ground_truth.csv` as a flat CSV mirror.
+  Has a circuit breaker (3 consecutive 429s aborts the run).
+- `streamlit_app.py` — six-tab dashboard (Overview / Inbox / Eval /
+  Design / Roadmap / About) reading `outputs/latest-eval.json`.
+  **No live LLM calls from the page** — every visitor sees the same
+  pre-computed numbers, no quota burn.
+- `.streamlit/config.toml` + `requirements.txt` for Streamlit Cloud.
+- `outputs/eval-hyperswitch-20260606T074005Z.json` — the canonical
+  10/10 eval. Pointed at by `outputs/latest-eval.json`.
 
-- **Hard timeout + bounded retry on every Gemini call.** `genai.Client` is
-  constructed with `HttpOptions(timeout=60_000)`. A `_with_retry` helper
-  wraps each call: 3 attempts, exponential backoff (2s → 4s), every
-  attempt streams a labeled progress event so you can see exactly which
-  stage is in flight and how long it took.
-  See: `src/classify/classifier.py:_with_retry`,
-  `src/classify/classifier.py:stage1_tag`,
-  `src/classify/classifier.py:stage2_relevance`.
+### First clean eval result
 
-- **Stage 2 default switched to Flash.** Both stages now run
-  `gemini-2.5-flash` on the free tier. The model is env-overridable via
-  `COMPLY_STAGE2_MODEL=gemini-2.5-pro` — a one-line swap the moment billing
-  is enabled. See `src/classify/classifier.py:20-24` and
-  `DECISIONS.md` (2026-06-06 entry).
+| Metric | Value |
+|---|---|
+| Bulletins | 10 (5 relevant + 5 not_relevant) |
+| TP / FP / TN / FN | 5 / 0 / 5 / 0 |
+| Precision | 1.000 |
+| Recall | 1.000 |
+| F1 | 1.000 |
+| Accuracy | 1.000 |
+| Wall-clock | 126.6s (including two ~48s rate-limiter sleeps) |
 
-A **30s-bounded smoke test** (`scripts/smoke_gemini.py`) verifies the SDK +
-key + network path with a single Flash call before the full skateboard runs.
-Run it any time the runner feels stuck:
+The dashboard already calls this out honestly in the **Eval** tab:
+*"corpus is small (10 bulletins, Visa only) and synthesized from public Visa
+programs — this is a sanity check on the two-stage architecture, not a SOTA
+claim. The next iteration expands to 30+ bulletins…"*
+
+---
+
+## Lessons from today (in DECISIONS.md but worth repeating)
+
+- **Gemini 2.5 Pro free-tier limit = 0 requests.** Paid-only.
+- **Gemini 2.5 Flash free-tier limit = 20 requests/day.** Tight enough that
+  repeat eval runs blow through it. Burned this discovering it.
+- **Gemini 2.5 Flash-Lite free-tier limit = 1000 requests/day.** Comfortable
+  for development. Default for both stages in v0; env-swap to Flash + Pro
+  on a billed key.
+- **Always set client-side timeouts on external SDKs.** The 7-hour stall
+  yesterday was the google-genai SDK honoring a server `retryDelay` hint
+  with no client timeout to cap it. Hard-learned the standard rule for
+  long-running calls: bounded timeout + bounded retry + streamed progress.
+- **For free-tier-hosted demos, render pre-computed artifacts.** Every
+  visitor triggering live LLM calls = shared-quota burn + non-deterministic
+  numbers. The dashboard reads a committed JSON; eval refresh is a
+  deliberate CLI invocation.
+
+---
+
+## What's deliberately deferred to v0.2
+
+- Code RAG over Hyperswitch (Voyage embeddings + Supabase pgvector).
+- Impact-assessment LLM stage (bulletin + retrieved code chunks → draft).
+- Deterministic priority rubric (P0–P3).
+- GitHub Issue creation on the Hyperswitch fork.
+- GitHub Actions cron that runs the pipeline weekly and commits refreshed
+  `latest-eval.json`.
+
+Rationale: the **Roadmap** tab in the dashboard names these explicitly as
+v0.2, so a hiring manager reading the artifact sees that "agent loop" is
+scoped and understood, not just absent.
+
+---
+
+## YOUR action: deploy to Streamlit Community Cloud (~5 minutes)
+
+This is the only thing standing between us and the public demo URL. Cannot
+be automated from here — Streamlit Cloud needs you to click through their
+flow once. Then it self-rebuilds on every push.
+
+1. Open **https://share.streamlit.io** in a new tab.
+2. Click **"Sign in with GitHub"**. Authorize Streamlit on
+   `karthikeyan-smg1`.
+3. On the dashboard, click **"Create app"** (top right) →
+   **"Deploy a public app from GitHub"**.
+4. Fill in:
+   - **Repository:** `karthikeyan-smg1/complyagent`
+   - **Branch:** `main`
+   - **Main file path:** `streamlit_app.py`
+   - **App URL:** something memorable like `complyagent` (gives you
+     `https://complyagent.streamlit.app`)
+5. **Advanced settings → Python version:** 3.11 (or 3.12 — both work).
+6. **Secrets:** leave empty. The dashboard does not need any secrets to
+   render the cached results. (If you later add a "live classifier" mode,
+   that's the place for `GEMINI_API_KEY`.)
+7. Click **"Deploy!"**. Initial build takes 3-5 minutes; subsequent pushes
+   redeploy in ~30 seconds.
+
+Once you have the URL:
+- Paste it on the **Live demo** line of `README.md` (currently a
+  placeholder).
+- Generate a QR code at https://qrcode.show or similar — drop on the
+  resume.
+- Send me the URL and I'll do a final pass: paste it into README, the
+  dashboard sidebar, and the LinkedIn-shareable copy.
+
+If anything in the Streamlit Cloud flow goes sideways, paste the error
+here and I'll debug.
+
+---
+
+## Tomorrow / next session
+
+- Verify the live URL works and update README, dashboard sidebar, and
+  optional `<meta>` tags in the dashboard.
+- (Optional) Rotate the Gemini API key that was pasted in chat yesterday
+  — 60 seconds in AI Studio.
+- (Optional) Start v0.2: code RAG indexer + impact assessment + Issue
+  creation. Closes the agent loop end-to-end and is the differentiator vs
+  classifier-only demos.
+
+---
+
+## Quick commands
 
 ```bash
-uv run python scripts/smoke_gemini.py
-# expects: [HH:MM:SS] OK in <2s. response: 'ok'
-```
-
-### 2. The skateboard now streams live progress
-
-Every run prints a timestamped line per phase, with elapsed time and remaining
-count. No more silent multi-hour stalls — if a call is slow, you see it. If
-a call dies, you see the exception inside the 60s window. Example from
-this morning's run:
-
-```
-08:43:28 → [1/3] classifying visa-2026-q1-001 (2026-q1-visa-cit-aft-mandate.md)
-08:43:28    stage1: attempt 1/3 sent
-08:43:32    stage1: ok in 4.2s
-08:43:32    stage2: attempt 1/3 sent
-08:43:39    stage2: ok in 7.5s
-08:43:39    ✓ done in 11.8s (2 remaining)
-```
-
-### 3. Classifier results, this run
-
-| Bulletin | Predicted | Expected | Confidence | Affected surfaces |
-| --- | --- | --- | --- | --- |
-| `visa-2026-q1-001` (CIT/MIT + AFT mandate) | **relevant** | relevant | 1.00 | authorization_flow, recurring_payments, chargebacks_and_disputes, settlement_and_reconciliation, connector_routing_rules |
-| `visa-2026-q1-003` (Cross-Border Commerce — marketing) | **not_relevant** | not_relevant | 1.00 | — |
-| `visa-2026-q2-002` (3DS 2.3 protocol update) | **relevant** | relevant | 1.00 | 3ds_authentication, authorization_flow, fraud_signals_and_risk_scoring, chargebacks_and_disputes |
-
-The Stage-2 reasoning quotes specific bulletin language (`"payment
-orchestrators handling AFT-eligible transaction flows must..."`) and names
-specific profile surfaces — exactly the eval criterion in BRIEF §4. Full
-reasoning is in the JSON artifact.
-
-**Sanity check, not validation.** Three bulletins is too small to claim the
-precision/recall targets in BRIEF §4 are met. It validates that the
-two-stage architecture and prompts work end-to-end and that Flash is good
-enough for clear-cut cases. The harder eval — 30+ bulletins, hand-labeled,
-including borderline cases — is Phase 2.
-
----
-
-## State of the codebase
-
-- **Connections verified:** Gemini Flash, Voyage (1024-dim), Supabase auth,
-  Langfuse `auth_check` — see `scripts/verify_connections.py`.
-- **Tenant config layer:** Pydantic-validated, loads from
-  `tenants/hyperswitch/{config.yaml,product_profile.yaml}`. Pipeline
-  modules take a `TenantConfig` argument, not hardcoded paths. The
-  multi-tenant story is in the code structure already.
-- **Classifier:** `src/classify/classifier.py` — two stages, structured
-  output via Pydantic + `response_schema`, timeouts + retries + progress
-  hooks.
-- **Bulletin ingest:** `src/ingest/bulletin.py` parses YAML frontmatter
-  conventions documented in `tenants/hyperswitch/bulletins/README.md`
-  (sourcing transparency, `synthesized: true` flag).
-- **Runner:** `scripts/run_skateboard.py` — full end-to-end with Rich
-  table, agreement scoring, JSON artifact under `outputs/`.
-
----
-
-## Task list (post-Phase-1)
-
-**Done overnight:**
-
-- `[x]` Verify 4 API connections respond
-- `[x]` Set up Python project with uv
-- `[x]` Scaffold `tenants/hyperswitch/`
-- `[x]` Scaffold `src/` module skeleton
-- `[x]` Write README skeleton with "Scaling to SaaS" section
-- `[x]` Curate 3 public Visa bulletins as markdown
-- `[x]` Build two-stage Gemini classifier
-- `[x]` Add timeouts + retries + live progress to every Gemini call
-- `[x]` Run classifier on Visa bulletins, capture results
-
-**Blocked / pending:**
-
-- `[ ]` **First commit + push to `karthikeyan-smg1/complyagent`** —
-  blocked on Xcode CLT license (see §6).
-
-**Next up (Phase 2 — hand-labeled eval, the BRIEF §4 numerical claim):**
-
-- `[ ]` Curate 15-25 more Visa bulletins (mix of mandatory / informational
-  / marketing / out-of-scope jurisdiction) — enough to make precision /
-  recall meaningful.
-- `[ ]` Hand-label them in `tenants/hyperswitch/ground_truth.csv` with
-  expected relevance + priority.
-- `[ ]` Build `scripts/run_eval.py` — runs classifier over the corpus and
-  computes precision / recall / confusion matrix against ground truth.
-- `[ ]` Record one run in `outputs/eval-baseline.json` to anchor future
-  prompt changes.
-
----
-
-## 6. Blockers needing your hand
-
-### Xcode license — NOT accepted yet
-
-Last night you said you accepted the license, but the check still says
-otherwise:
-
-```
-$ sudo xcodebuild -license check
-You have not agreed to the Xcode license agreements. Please run
-'sudo xcodebuild -license' from within a Terminal window to review and
-agree to the Xcode and Apple SDKs license.
-```
-
-This blocks `git` (which is fronted by `xcrun`). **Open Terminal.app
-(not VS Code, not iTerm) and run:**
-
-```bash
-sudo xcodebuild -license
-```
-
-Scroll to the bottom of the license text with `space`, type `agree`, hit
-return, enter your Mac password. After that:
-
-```bash
-cd ~/Documents/Claude/ComplianceAgent
-git init && git add -A && git status   # sanity check before committing
-```
-
-Once that's clean, ping me and I'll do the first commit + push to
-`karthikeyan-smg1/complyagent` in the next session.
-
-### (Reminder) Gemini key hygiene
-
-A Gemini API key was pasted in chat during setup last night, so logs /
-transcripts have it. Rotate it in AI Studio when convenient (Get API key
-→ delete the old one → create new → update `.env` `GEMINI_API_KEY=`).
-Costs <60 seconds and you have nothing standing on the old one.
-
----
-
-## How to resume in the next session
-
-```bash
-cd ~/Documents/Claude/ComplianceAgent
-export PATH="$HOME/.local/bin:$PATH"
-
-# 1. Sanity-check the network + SDK path (15s bounded)
+# Sanity test
 uv run python scripts/smoke_gemini.py
 
-# 2. Re-run the skateboard if you want fresh numbers
-uv run python scripts/run_skateboard.py hyperswitch
+# Refresh eval (writes outputs/latest-eval.json — commit + push to redeploy)
+uv run python scripts/run_eval.py hyperswitch
 
-# 3. Inspect the latest artifact
-ls -lt outputs/ | head -3
+# Boot dashboard locally
+uv run streamlit run streamlit_app.py
+
+# Inspect latest eval artifact
+python3 -c "import json; print(json.dumps(json.load(open('outputs/latest-eval.json'))['metrics'], indent=2))"
 ```
-
-If `scripts/smoke_gemini.py` ever takes more than ~5 seconds: the network
-is the problem, not the code. Check your wifi / VPN / corporate proxy.
-
----
-
-## Process lesson for me (Claude)
-
-The 7-hour stall was on me. Every external call from an autonomous run
-needs (a) a hard client-side timeout, (b) bounded retries, and (c) a
-visible progress line per attempt. I added all three after the fact, but
-the right time was *before* I started the long-running run. Going forward
-for any process the user can't watch in real time: timeout-bounded,
-progress-streaming, and never trust SDK defaults to fail fast.
