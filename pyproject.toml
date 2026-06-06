@@ -1,0 +1,35 @@
+[project]
+name = "complyagent"
+version = "0.1.0"
+description = "Repo-connected AI compliance agent for payments codebases"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Karthikeyan Subramaniam" }]
+
+dependencies = [
+    "google-genai>=0.3.0",
+    "voyageai>=0.3.0",
+    "supabase>=2.0.0",
+    "langfuse>=2.40.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

@@ -1,0 +1,67 @@
+# Product profile for Hyperswitch — the description the relevance classifier
+# uses to judge whether a regulatory bulletin affects this codebase.
+# Keep this concrete: name the rails, methods, and surfaces actually implemented.
+
+product:
+  name: Hyperswitch
+  vendor: Juspay
+  description: >
+    Open-source payments orchestrator written in Rust. Routes, retries, and
+    settles card and alternate-payment transactions across multiple connectors.
+
+primary_concerns:
+  # What this codebase actually does — used to score relevance.
+  payment_methods:
+    - card_present
+    - card_not_present
+    - tokenized_card
+    - upi
+    - wallet
+    - bank_transfer
+  card_networks:
+    - visa
+    - mastercard
+    - rupay
+    - amex
+    - discover
+  rails:
+    - card
+    - upi
+    - sepa
+    - ach
+    - nach
+  jurisdictions:
+    - IN     # primary — Juspay is India-headquartered
+    - US
+    - EU
+    - UK
+    - SG
+
+  surfaces:
+    # Concrete capabilities — bulletins touching these are likely relevant.
+    - authorization_flow
+    - 3ds_authentication
+    - tokenization_and_network_tokens
+    - mandate_handling
+    - recurring_payments
+    - refunds_and_reversals
+    - chargebacks_and_disputes
+    - settlement_and_reconciliation
+    - fraud_signals_and_risk_scoring
+    - pci_scope_and_card_vault
+    - kyc_aml_screening
+    - fee_and_interchange_calculation
+    - multi_currency_and_fx
+    - connector_routing_rules
+
+out_of_scope:
+  # Topics the relevance classifier should de-prioritize.
+  - issuer_side_card_production
+  - merchant_acquiring_underwriting
+  - point_of_sale_hardware_certification
+  - atm_network_operations
+
+notes: |
+  This profile is the primary input to Stage 2 relevance classification.
+  Updates here should be small and infrequent — when Hyperswitch genuinely
+  adds or removes a capability — not on every release.

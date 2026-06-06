@@ -1,0 +1,56 @@
+# Tenant configuration for the v0 single-tenant prototype.
+# All company-specific settings live here. The pipeline is parameterized over
+# this file; the same code serves any number of tenants in a SaaS deployment.
+# See DECISIONS.md 2026-06-05 (tenant-shaped single-tenant).
+
+tenant:
+  slug: hyperswitch
+  display_name: Hyperswitch (Juspay)
+  contact_email: demo@complyagent.dev   # placeholder
+
+codebase:
+  provider: github
+  repo: juspay/hyperswitch              # upstream; we index this
+  default_branch: main
+  language_hint: rust
+  # v0: cloned locally for indexing.
+  # v1 SaaS: github_app_installation_id.
+
+product_profile:
+  path: tenants/hyperswitch/product_profile.yaml
+
+regulatory_scope:
+  # Architecture is multi-network; v0 corpus is Visa only.
+  # See DECISIONS.md 2026-06-06 (narrow v0 to Visa).
+  jurisdictions: [IN, US, EU]
+  payment_rails:  [card, upi, sepa, ach, nach]
+  card_networks: [visa, mastercard, rupay]
+  central_banks: [rbi, fed, ecb]
+
+schedule:
+  cron: "0 6 * * 1"                     # weekly Mon 06:00
+  timezone: Asia/Kolkata
+  enabled: false                        # v0: manual runs only
+
+issue_tracker:
+  primary: github
+  github:
+    repo: karthikeyan-smg1/hyperswitch  # the fork we file issues against
+    labels: [compliance, auto-generated]
+    assignees: []
+  jira:
+    enabled: false
+    # v1 SaaS: site, project_key, issue_type, default_components.
+    # Connection via Atlassian OAuth2, token in vault.
+
+notifications:
+  slack:
+    enabled: false                      # v1: webhook from vault
+  email:
+    enabled: false
+
+priority_rubric:
+  use_default: true                     # see src/prioritize/ for default weights
+
+eval:
+  ground_truth_path: tenants/hyperswitch/ground_truth.csv
