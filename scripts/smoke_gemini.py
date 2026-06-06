@@ -28,11 +28,12 @@ def main() -> int:
         api_key=os.environ["GEMINI_API_KEY"],
         http_options=types.HttpOptions(timeout=15_000),
     )
-    print(f"[{time.strftime('%H:%M:%S')}] sending Flash request...", flush=True)
+    model = sys.argv[1] if len(sys.argv) > 1 else "gemini-2.5-flash"
+    print(f"[{time.strftime('%H:%M:%S')}] sending {model} request...", flush=True)
     t0 = time.monotonic()
     try:
         resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=model,
             contents="Reply with exactly the single word: ok",
             config=types.GenerateContentConfig(temperature=0.0),
         )

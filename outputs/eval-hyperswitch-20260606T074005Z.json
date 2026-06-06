@@ -1,0 +1,251 @@
+{
+  "tenant": "hyperswitch",
+  "run_at_utc": "20260606T074005Z",
+  "metrics": {
+    "total": 10,
+    "labeled": 10,
+    "skipped_unlabeled": 0,
+    "true_positive": 5,
+    "false_positive": 0,
+    "true_negative": 5,
+    "false_negative": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "accuracy": 1.0
+  },
+  "results": [
+    {
+      "bulletin_id": "visa-2026-q1-001",
+      "file": "tenants/hyperswitch/bulletins/2026-q1-visa-cit-aft-mandate.md",
+      "title": "Visa CIT/MIT Indicator Update \u2014 Mandatory Transaction Type Reporting for Account Funding Transactions",
+      "expected_relevance": "relevant",
+      "expected_priority": "P1",
+      "tags": {
+        "network": "visa",
+        "topic": "reporting",
+        "action_type": "regulatory_change",
+        "effective_date": "2026-10-01",
+        "mandatory": true,
+        "summary": "Visa requires acquirers to report new CIT/MIT sub-type indicators for Account Funding Transactions starting October 1, 2026, with penalties for non-compliance."
+      },
+      "relevance": {
+        "relevant": true,
+        "confidence": 1.0,
+        "reasoning": "The bulletin mandates changes to how acquirers report transaction types for Account Funding Transactions (AFT) on Visa rails, specifically requiring the population of CIT/MIT indicator fields in authorization and clearing messages. The product profile supports 'card' rails and 'card_not_present' payment methods, which are directly impacted by these reporting requirements for authorization and clearing.",
+        "affected_surfaces": [
+          "authorization_flow",
+          "settlement_and_reconciliation"
+        ]
+      },
+      "elapsed_s": 3.08
+    },
+    {
+      "bulletin_id": "visa-2026-q1-003",
+      "file": "tenants/hyperswitch/bulletins/2026-q1-visa-cross-border-commerce-program.md",
+      "title": "Visa Cross-Border Commerce Acceptance Program \u2014 Now Available for Small Business Issuers",
+      "expected_relevance": "not_relevant",
+      "expected_priority": null,
+      "tags": {
+        "network": "visa",
+        "topic": "other",
+        "action_type": "marketing",
+        "effective_date": null,
+        "mandatory": false,
+        "summary": "Visa is expanding its Cross-Border Commerce Acceptance Program to small business issuers in 14 additional countries, offering benefits like preferred currency conversion rates and rewards."
+      },
+      "relevance": {
+        "relevant": false,
+        "confidence": 1.0,
+        "reasoning": "The bulletin describes a promotional and marketing initiative by Visa for small business issuers, offering benefits like preferred currency conversion rates and rewards. The bulletin explicitly states there are no rule changes, message format changes, or required system updates for non-participating issuers, acquirers, or merchants. The target product, Hyperswitch, does not need to change its behavior as a result of this marketing program.",
+        "affected_surfaces": []
+      },
+      "elapsed_s": 2.99
+    },
+    {
+      "bulletin_id": "visa-2026-q1-004",
+      "file": "tenants/hyperswitch/bulletins/2026-q1-visa-vdrp-dispute-process-update.md",
+      "title": "Visa Dispute Resolution Process \u2014 Pre-Arbitration Evidence Format Update",
+      "expected_relevance": "relevant",
+      "expected_priority": "P1",
+      "tags": {
+        "network": "visa",
+        "topic": "chargeback",
+        "action_type": "regulatory_change",
+        "effective_date": "2026-07-01",
+        "mandatory": true,
+        "summary": "Visa is updating pre-arbitration evidence format requirements to a structured JSON envelope plus attachments for specific dispute reason codes, effective July 1, 2026."
+      },
+      "relevance": {
+        "relevant": true,
+        "confidence": 1.0,
+        "reasoning": "The bulletin requires payment orchestrators to update their dispute response pipeline to emit a new JSON evidence format and persist transaction context. The target product profile includes 'chargebacks_and_disputes' as a supported surface, indicating this bulletin directly impacts the product's functionality in handling disputes.",
+        "affected_surfaces": [
+          "chargebacks_and_disputes"
+        ]
+      },
+      "elapsed_s": 2.85
+    },
+    {
+      "bulletin_id": "visa-2026-q1-002",
+      "file": "tenants/hyperswitch/bulletins/2026-q1-visa-vts-network-token-recurring.md",
+      "title": "Visa Token Service \u2014 Mandatory Network Tokenization for Stored Recurring Credentials",
+      "expected_relevance": "relevant",
+      "expected_priority": "P0",
+      "tags": {
+        "network": "visa",
+        "topic": "tokenization",
+        "action_type": "regulatory_change",
+        "effective_date": "2027-04-01",
+        "mandatory": true,
+        "summary": "Visa is mandating the use of Visa Token Service for all stored credentials for recurring and unscheduled cardholder-initiated transactions, with non-compliant transactions facing hard declines and penalties starting April 1, 2027."
+      },
+      "relevance": {
+        "relevant": true,
+        "confidence": 1.0,
+        "reasoning": "The bulletin mandates the use of Visa Token Service for all stored credentials for recurring and unscheduled cardholder-initiated transactions on Visa rails. The product profile supports 'tokenization_and_network_tokens' and 'recurring_payments' surfaces, which are directly impacted by this requirement to provision and use network tokens.",
+        "affected_surfaces": [
+          "tokenization_and_network_tokens",
+          "recurring_payments"
+        ]
+      },
+      "elapsed_s": 3.02
+    },
+    {
+      "bulletin_id": "visa-2026-q2-002",
+      "file": "tenants/hyperswitch/bulletins/2026-q2-visa-3ds-2-3-update.md",
+      "title": "Visa Secure \u2014 Mandatory Support for EMV 3DS 2.3 Authentication Indicators",
+      "expected_relevance": "relevant",
+      "expected_priority": "P0",
+      "tags": {
+        "network": "visa",
+        "topic": "3ds",
+        "action_type": "regulatory_change",
+        "effective_date": "2026-10-15",
+        "mandatory": true,
+        "summary": "Visa Secure mandates support for EMV 3DS 2.3 protocol and new authentication exemption indicators by October 15, 2026, requiring updates to message formats and data handling for all participants."
+      },
+      "relevance": {
+        "relevant": true,
+        "confidence": 1.0,
+        "reasoning": "The bulletin mandates support for EMV 3DS 2.3 protocol and new authentication exemption indicators for all participants in Visa Secure authentication flows. The product profile explicitly lists '3ds_authentication' as a supported surface, indicating that changes to the 3DS protocol will directly impact its behavior.",
+        "affected_surfaces": [
+          "3ds_authentication"
+        ]
+      },
+      "elapsed_s": 51.4
+    },
+    {
+      "bulletin_id": "visa-2026-q2-009",
+      "file": "tenants/hyperswitch/bulletins/2026-q2-visa-india-irf-adjustment.md",
+      "title": "India Domestic Interchange Reimbursement Fee \u2014 Rate Adjustment for Card-Not-Present Consumer Credit Transactions",
+      "expected_relevance": "relevant",
+      "expected_priority": "P2",
+      "tags": {
+        "network": "visa",
+        "topic": "interchange",
+        "action_type": "rate_change",
+        "effective_date": "2026-07-01",
+        "mandatory": true,
+        "summary": "Visa is adjusting the domestic Interchange Reimbursement Fee (IRF) schedule for India-domiciled card-not-present (CNP) consumer credit transactions, introducing a tiered MCC-based structure effective July 1, 2026."
+      },
+      "relevance": {
+        "relevant": true,
+        "confidence": 1.0,
+        "reasoning": "The bulletin explicitly states that 'Acquirers, gateways, and payment orchestrators that calculate or pass on interchange fees in any form must update fee calculation tables and merchant statements'. The target product profile includes 'fee_and_interchange_calculation' as a supported surface, indicating it handles interchange fee calculations.",
+        "affected_surfaces": [
+          "fee_and_interchange_calculation"
+        ]
+      },
+      "elapsed_s": 3.0
+    },
+    {
+      "bulletin_id": "visa-2026-q2-006",
+      "file": "tenants/hyperswitch/bulletins/2026-q2-visa-marketplace-operator-settlement.md",
+      "title": "Marketplace Operator Settlement Reporting \u2014 New Quarterly Filing for Visa-Designated Marketplaces",
+      "expected_relevance": "not_relevant",
+      "expected_priority": null,
+      "tags": {
+        "network": "visa",
+        "topic": "reporting",
+        "action_type": "regulatory_change",
+        "effective_date": "2026-07-01",
+        "mandatory": true,
+        "summary": "Visa is introducing a new quarterly Marketplace Operator Settlement Report (MOSR) for designated Marketplace Operators, requiring detailed reporting on seller funding and KYC posture starting July 1, 2026."
+      },
+      "relevance": {
+        "relevant": false,
+        "confidence": 1.0,
+        "reasoning": "The bulletin requires reporting from Visa Marketplace Operators (VMOs) regarding seller funding and KYC posture. The target product, Hyperswitch, is described as a payments orchestrator and is explicitly stated as out of scope unless it holds VMO designation, which is not indicated in its profile. Therefore, no changes are required for Hyperswitch based on this bulletin.",
+        "affected_surfaces": []
+      },
+      "elapsed_s": 3.14
+    },
+    {
+      "bulletin_id": "visa-2026-q2-007",
+      "file": "tenants/hyperswitch/bulletins/2026-q2-visa-stablecoin-settlement-pilot.md",
+      "title": "Visa Stablecoin Settlement Pilot \u2014 Expanded Availability for Issuing and Acquiring Bank Treasuries",
+      "expected_relevance": "not_relevant",
+      "expected_priority": null,
+      "tags": {
+        "network": "visa",
+        "topic": "settlement",
+        "action_type": "operational_notice",
+        "effective_date": "2026-07-01",
+        "mandatory": false,
+        "summary": "Visa is expanding its stablecoin settlement pilot to more issuing and acquiring banks, allowing them to settle inter-bank obligations using stablecoins on various networks."
+      },
+      "relevance": {
+        "relevant": false,
+        "confidence": 1.0,
+        "reasoning": "The bulletin explicitly states that this is a bank-treasury-level settlement option and does not change anything about the merchant-side or cardholder-side transaction experience. It also states that for payment orchestrators, no action is required. Therefore, it does not require any changes to the Hyperswitch product.",
+        "affected_surfaces": []
+      },
+      "elapsed_s": 3.11
+    },
+    {
+      "bulletin_id": "visa-2026-q3-008",
+      "file": "tenants/hyperswitch/bulletins/2026-q3-visa-click-to-pay-v2-ga.md",
+      "title": "Click to Pay v2.0 \u2014 General Availability Across All Visa Markets",
+      "expected_relevance": "not_relevant",
+      "expected_priority": null,
+      "tags": {
+        "network": "visa",
+        "topic": "authorization",
+        "action_type": "product_launch",
+        "effective_date": "2026-09-01",
+        "mandatory": false,
+        "summary": "Visa is announcing the general availability of Click to Pay version 2.0, an opt-in consumer checkout experience, across all markets starting September 1, 2026."
+      },
+      "relevance": {
+        "relevant": false,
+        "confidence": 1.0,
+        "reasoning": "The bulletin describes Visa's Click to Pay version 2.0, an opt-in consumer checkout experience. The product profile indicates that headless payment orchestrators like Hyperswitch do not render checkout UIs and therefore do not interact directly with Click to Pay. The bulletin explicitly states that 'cardholder selection of a Click-to-Pay card occurs upstream in the merchant or commerce-platform layer before the resulting transaction reaches the orchestrator.'",
+        "affected_surfaces": []
+      },
+      "elapsed_s": 51.34
+    },
+    {
+      "bulletin_id": "visa-2026-q3-010",
+      "file": "tenants/hyperswitch/bulletins/2026-q3-visa-issuer-card-production-refresh.md",
+      "title": "Issuer Card Production Standards \u2014 Personalization File Format Refresh and Certified Vendor List Update",
+      "expected_relevance": "not_relevant",
+      "expected_priority": null,
+      "tags": {
+        "network": "visa",
+        "topic": "other",
+        "action_type": "regulatory_change",
+        "effective_date": "2026-12-01",
+        "mandatory": true,
+        "summary": "Visa is updating the Issuer Card Production Personalization File Specification to version 7.0, requiring issuing banks and their card-production vendors to adopt the new schema and re-certify their production lines by December 1, 2026."
+      },
+      "relevance": {
+        "relevant": false,
+        "confidence": 1.0,
+        "reasoning": "The bulletin explicitly states that it is out of scope for payment orchestrators in their merchant-side capacity. The product profile also lists 'issuer_side_card_production' as out of scope, which aligns with the bulletin's focus on card personalization and production.",
+        "affected_surfaces": []
+      },
+      "elapsed_s": 2.7
+    }
+  ]
+}

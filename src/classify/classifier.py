@@ -14,7 +14,10 @@ proxy, dropped TLS) silently hangs the runner.
 from __future__ import annotations
 
 import os
+import re
+import threading
 import time
+from collections import deque
 from typing import Callable, Literal, TypeVar
 
 import yaml
@@ -22,17 +25,73 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
-# Stage 2 default is Flash (not Pro): Gemini 2.5 Pro free-tier limit is 0
-# requests — the API returns 429 immediately. Swap to "gemini-2.5-pro" via env
-# the moment a billed key is wired up; Pro is the correct judgment model.
-STAGE1_MODEL = os.environ.get("COMPLY_STAGE1_MODEL", "gemini-2.5-flash")
-STAGE2_MODEL = os.environ.get("COMPLY_STAGE2_MODEL", "gemini-2.5-flash")
+# Both stages default to `gemini-2.5-flash-lite` because the Gemini free tier
+# is so tight: Flash daily limit is 20 requests/day, Pro is 0. Flash-Lite
+# allows 1000/day, comfortably enough for repeated eval runs.
+#
+# The model swap is env-configurable — on a billed key, set
+# `COMPLY_STAGE1_MODEL=gemini-2.5-flash` and `COMPLY_STAGE2_MODEL=gemini-2.5-pro`
+# for the higher-fidelity production stack. See DECISIONS.md (2026-06-06).
+STAGE1_MODEL = os.environ.get("COMPLY_STAGE1_MODEL", "gemini-2.5-flash-lite")
+STAGE2_MODEL = os.environ.get("COMPLY_STAGE2_MODEL", "gemini-2.5-flash-lite")
 
 DEFAULT_TIMEOUT_MS = 60_000  # 60s per call — generous for Pro, fails fast on stall
-DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_MAX_ATTEMPTS = 4
 RETRY_BASE_SECONDS = 2.0
 
+# Free-tier Gemini RPM limits (per-model): Flash ≈ 10 RPM, Flash-Lite ≈ 15 RPM.
+# We share a global limiter set conservatively below the Flash floor so a
+# single batch eval doesn't burst past the window.
+DEFAULT_RATE_LIMIT_RPM = int(os.environ.get("COMPLY_GEMINI_RPM", "8"))
+
 T = TypeVar("T")
+
+
+class _RateLimiter:
+    """Token-bucket-ish RPM limiter shared across stages.
+
+    Tracks request timestamps in a deque; before each call, prunes expired
+    entries (>60s old) and sleeps if at capacity.
+    """
+
+    def __init__(self, max_per_minute: int):
+        self.max = max_per_minute
+        self.window = 60.0
+        self._times: deque[float] = deque()
+        self._lock = threading.Lock()
+
+    def acquire(self, on_event: Callable[[str], None] | None = None) -> None:
+        with self._lock:
+            now = time.monotonic()
+            while self._times and now - self._times[0] > self.window:
+                self._times.popleft()
+            if len(self._times) >= self.max:
+                sleep_for = self.window - (now - self._times[0]) + 0.2
+                if on_event and sleep_for > 0.5:
+                    on_event(f"rate-limit: at {self.max} RPM cap, sleeping {sleep_for:.1f}s")
+                if sleep_for > 0:
+                    time.sleep(sleep_for)
+                now = time.monotonic()
+                while self._times and now - self._times[0] > self.window:
+                    self._times.popleft()
+            self._times.append(time.monotonic())
+
+
+_RATE_LIMITER = _RateLimiter(DEFAULT_RATE_LIMIT_RPM)
+
+
+_RETRY_DELAY_RE = re.compile(r"retryDelay'?\s*:\s*'?(\d+(?:\.\d+)?)s")
+
+
+def _server_retry_delay(err: Exception) -> float | None:
+    """Pull `retryDelay: 'Ns'` out of a Gemini 429 payload, if present."""
+    m = _RETRY_DELAY_RE.search(str(err))
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except ValueError:
+        return None
 
 
 class Stage1Tags(BaseModel):
@@ -122,9 +181,15 @@ def _with_retry(
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     on_event: Callable[[str], None] | None = None,
 ) -> T:
-    """Run fn with bounded retries. on_event receives short progress strings."""
+    """Run fn with bounded retries.
+
+    Each attempt first passes through the shared rate limiter. On 429, prefers
+    the server-supplied `retryDelay` over exponential backoff so we don't fight
+    Gemini's own pacing hint.
+    """
     last_err: Exception | None = None
     for attempt in range(1, max_attempts + 1):
+        _RATE_LIMITER.acquire(on_event=on_event)
         if on_event:
             on_event(f"{label}: attempt {attempt}/{max_attempts} sent")
         t0 = time.monotonic()
@@ -142,9 +207,15 @@ def _with_retry(
                 )
             if attempt == max_attempts:
                 break
-            backoff = RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+            server_delay = _server_retry_delay(e)
+            backoff = (
+                server_delay + 0.5
+                if server_delay is not None
+                else RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+            )
             if on_event:
-                on_event(f"{label}: backing off {backoff:.1f}s before retry")
+                source = "server-hint" if server_delay is not None else "exp-backoff"
+                on_event(f"{label}: backing off {backoff:.1f}s ({source}) before retry")
             time.sleep(backoff)
     assert last_err is not None
     raise last_err

@@ -98,3 +98,39 @@
 **Secondary fix in the same patch.** Every Gemini call now has a hard 60s HTTP timeout via `HttpOptions(timeout=60_000)` and a 3-attempt retry with exponential backoff. The first skateboard run hung for 7 hours because the original code passed no timeout, and the google-genai SDK appears to honor server-side `retryDelay` hints on 429s — turning a "Pro is paid-only" error into a silent multi-hour stall. Every Gemini-touching path now fails fast.
 
 **Anti-goal.** No silent fallbacks ("if Pro 429s, fall back to Flash"). The model in use is explicit per-run via env, recorded in run output. Surprises are worse than constraints.
+
+---
+
+## 2026-06-06 — Default both stages to `gemini-2.5-flash-lite` (Flash free-tier daily limit is 20)
+
+**Decision.** Stage 1 and Stage 2 both default to `gemini-2.5-flash-lite`. Both are env-overridable via `COMPLY_STAGE1_MODEL` / `COMPLY_STAGE2_MODEL` for billed-key production deployments (`gemini-2.5-flash` for Stage 1, `gemini-2.5-pro` for Stage 2).
+
+**Why this changed (again).** The previous entry switched Stage 2 from Pro → Flash on the assumption that Flash daily limits were ~250 requests. A second eval run today hit immediate 429s after the first 8 successful calls. The Gemini server then surfaced the actual limit: `quotaValue: '20'` for `gemini-2.5-flash` on the free tier. Twenty Flash requests per day is not enough for repeated eval runs (10 bulletins × 2 stages × N iterations).
+
+**What Flash-Lite gives up.** Stage 2 quality on borderline bulletins. Flash-Lite is a smaller distillation; for clear-cut bulletins (a stablecoin pilot that explicitly says "no action required for orchestrators", a CIT/MIT mandate with explicit acquirer obligations) it judges correctly, but on the harder borderline cases where the bulletin language is ambiguous, Flash and Pro materially outperform.
+
+**Why it's still the right v0 default.** Three reasons. (1) The free-tier constraint is what we have — Pro is paid-only, Flash is 20/day. Flash-Lite has 1000/day. (2) The two-stage architecture and prompt engineering are the load-bearing decisions; model choice is a one-line env swap. (3) The dashboard renders pre-computed `outputs/latest-eval.json` rather than calling the LLM live, so a hiring-manager visiting the demo URL doesn't burn any quota — meaning the model that matters in production is the env-set one for the cron, not the static-page one.
+
+**Eval baseline.** First clean end-to-end run on 10 bulletins: precision 1.000, recall 1.000, F1 1.000, accuracy 1.000 (5 TP / 0 FP / 5 TN / 0 FN). Wall-clock 126s including two ~48s rate-limiter sleeps. The dashboard surfaces this honestly with a "the corpus is small and synthesized — this is a sanity check, not a SOTA claim" caveat.
+
+**Secondary improvements in the same patch.**
+
+- **Client-side rate limiter** (8 RPM default, env-overridable via `COMPLY_GEMINI_RPM`) — token-bucket-ish; tracks request timestamps in a 60s sliding window and blocks before the next call when at cap. Prevents bursting past per-minute quotas.
+- **Server-hint-aware retry backoff** — when a 429 carries a `retryDelay` hint, we honor it (instead of exponential backoff). Server delays of 22-60s are common when the free-tier daily window is partially depleted.
+- **Circuit breaker** in `run_eval.py` — three consecutive 429-driven failures abort the run instead of burning 4 minutes × N bulletins on retry.
+
+**Anti-goal.** No automatic model fallback. If the configured Stage-2 model 429s, we surface the error and stop; we don't silently swap to a smaller model mid-run. Surprises in observability are worse than constraints.
+
+---
+
+## 2026-06-06 — Streamlit dashboard renders pre-computed eval, no live LLM calls
+
+**Decision.** The Streamlit dashboard reads `outputs/latest-eval.json` (committed to the repo) and renders the most recent classification + eval results. There is no "Run classifier" button. Live re-classification is a deliberate CLI invocation (`uv run python scripts/run_eval.py <tenant>`) that refreshes the committed artifact, which is then redeployed via the standard git push → Streamlit Cloud auto-rebuild.
+
+**Why.** Three forcing functions: (1) Gemini free-tier daily quota is 20 Flash + 1000 Flash-Lite — every visitor triggering live calls burns the shared quota in minutes. (2) Streamlit Cloud's shared environment doesn't support per-visitor API key isolation. (3) Live calls would make the headline precision/recall numbers non-deterministic; a hiring manager seeing different numbers on each refresh would lose trust in the eval.
+
+**What this rules out.** The "let me classify this bulletin in real time" demo. We trade away that bit of interactivity for: deterministic numbers, free-tier-safe public hosting, and a clear separation between *what the agent produced* (artifact) and *how to operate it* (CLI).
+
+**Alternative considered.** Per-visitor secrets via Streamlit Cloud's user-supplied secrets pattern (visitor pastes their own key). Rejected — adds friction at the top of the demo funnel and the audience is hiring managers, not power users.
+
+**Implication for the next iteration.** The GitHub Actions cron (Roadmap §1) is the eval-refresh mechanism. Each cron run = new bulletins ingested → classifier re-run → `latest-eval.json` committed → Streamlit Cloud redeploys automatically. Dashboard freshness is bounded by cron interval, not by visitor interaction.
