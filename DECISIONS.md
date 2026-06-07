@@ -159,3 +159,21 @@
 **What this rules out.** Cooking the corpus to a target accuracy number. If the classifier turns out to be worse than 80% on the adversarial cohort, that's the result; the dashboard surfaces it and the failure modes go on the roadmap as prompt-engineering or model-upgrade targets.
 
 **Anti-goal.** No retroactive "expected_relevance" relabeling after running the classifier. Labels are set at bulletin-authoring time, in frontmatter, in version control. The eval reports what the model produced against what was labeled — full stop. If the classifier disagrees and the model is right, that's a label bug, surfaced via DECISIONS.md as a separate entry — not by quietly editing the frontmatter.
+
+---
+
+## 2026-06-07 — Cost tracking + per-run USD budget guard; billing enabled
+
+**Decision.** Every Gemini call records `prompt_token_count` and `candidates_token_count` from the response's `usage_metadata`; the classifier converts these to a USD estimate using a model-keyed list-price table (`PRICING_USD_PER_MILLION` in `src/classify/classifier.py`). Per-bulletin and per-run costs are written to the eval JSON and displayed in the dashboard. The eval script enforces a **hard per-run USD cap** (`COMPLY_USD_BUDGET`, default $0.50) and aborts mid-run if the cumulative spend reaches the cap.
+
+**Why.** Karthik enabled Gemini billing to lift the 20-RPD free-tier cap, with a stated **monthly budget of INR 100** (~$1.20). Without instrumentation, a misconfigured model swap (e.g., Pro for both stages) could burn the monthly budget in a single eval — Pro is 12× the per-token cost of Flash-Lite. Cost tracking + a per-run cap turn that risk into an aborted run, not a billing surprise.
+
+**Default cap rationale.** A Flash-Lite full eval (16 bulletins × 2 stages, ~150K tokens) costs ~$0.02. Flash costs ~$0.06. Pro-on-Stage-2 costs ~$0.15. The $0.50 default leaves 3× headroom for the most expensive Pro run while hard-stopping any runaway.
+
+**First post-billing run.** 16 bulletins classified end-to-end in 63 seconds at a total cost of **$0.0053 (~₹0.44)** — 0.4% of the monthly budget. The full 100% precision / recall result was preserved.
+
+**A separate honesty caveat surfaced during this run.** Even my "adversarial" bulletins still contain explicit phrases like "such as payment orchestrators" or "No action is required for payment orchestrators" in the body. The classifier sometimes finds the answer in the body rather than reasoning about it. The eval tab now calls this out directly; the rigorous next iteration needs either real Visa bulletins or a re-writer that strips out role-mentions while preserving operational signal.
+
+**What the budget guard does not do.** It does not enforce a *monthly* spend cap — that would require persistent state (e.g., a `~/.complyagent/spend-log.json` file). For a single-user prototype with a 30-second eval that costs ₹0.44, the per-run cap is sufficient. If multiple processes / cron-driven evals start sharing the same key, the monthly cap belongs in a wrapper or a separate spend-budgeter.
+
+**Anti-goal.** No automatic cost-saving model downgrade. If Stage-2 is configured to Pro and the run would exceed the cap, the run aborts — it does not silently swap to Flash-Lite. Surprises in eval reproducibility are worse than constraints.

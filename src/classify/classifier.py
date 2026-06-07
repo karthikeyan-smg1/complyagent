@@ -39,10 +39,30 @@ DEFAULT_TIMEOUT_MS = 60_000  # 60s per call — generous for Pro, fails fast on 
 DEFAULT_MAX_ATTEMPTS = 4
 RETRY_BASE_SECONDS = 2.0
 
-# Free-tier Gemini RPM limits (per-model): Flash ≈ 10 RPM, Flash-Lite ≈ 15 RPM.
-# We share a global limiter set conservatively below the Flash floor so a
-# single batch eval doesn't burst past the window.
-DEFAULT_RATE_LIMIT_RPM = int(os.environ.get("COMPLY_GEMINI_RPM", "8"))
+# Rate limit defaults are env-overridable. Paid-tier Tier-1 RPM is
+# 360+ for Pro and 1000+ for Flash variants, so 30 RPM leaves plenty of
+# headroom while still gracefully throttling if multiple processes run.
+# Free tier RPM is 10-15; set COMPLY_GEMINI_RPM=8 there.
+DEFAULT_RATE_LIMIT_RPM = int(os.environ.get("COMPLY_GEMINI_RPM", "30"))
+
+# Per-million-token list prices (USD) as of 2026-06.
+# Source: ai.google.dev/gemini-api/docs/pricing
+# Input prices for ≤200K context window — Pro charges more at >200K which
+# we don't use here.
+PRICING_USD_PER_MILLION = {
+    "gemini-2.5-pro":         {"input": 1.25,  "output": 10.00},
+    "gemini-2.5-flash":       {"input": 0.30,  "output": 2.50},
+    "gemini-2.5-flash-lite":  {"input": 0.10,  "output": 0.40},
+}
+
+
+def estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+    """List-price cost estimate. Unknown model → 0; caller can detect."""
+    p = PRICING_USD_PER_MILLION.get(model)
+    if not p:
+        return 0.0
+    return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
+
 
 T = TypeVar("T")
 
@@ -132,10 +152,23 @@ class Stage2Result(BaseModel):
     )
 
 
+class CostEntry(BaseModel):
+    stage: Literal["stage1", "stage2"]
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+
+
 class ClassificationResult(BaseModel):
     bulletin_id: str
     tags: Stage1Tags
     relevance: Stage2Result
+    cost: list[CostEntry] = Field(default_factory=list)
+
+    @property
+    def total_cost_usd(self) -> float:
+        return sum(c.cost_usd for c in self.cost)
 
 
 STAGE1_SYSTEM = """You are a payments-domain classifier tagging regulatory and operational bulletins from card networks and central banks.
@@ -226,8 +259,9 @@ def stage1_tag(
     *,
     client: genai.Client | None = None,
     on_event: Callable[[str], None] | None = None,
-) -> Stage1Tags:
+) -> tuple[Stage1Tags, CostEntry]:
     c = client or _client()
+    captured: dict = {}
 
     def call() -> Stage1Tags:
         resp = c.models.generate_content(
@@ -242,9 +276,20 @@ def stage1_tag(
         )
         if resp.parsed is None:
             raise RuntimeError(f"stage1: parsing failed. Raw text: {resp.text!r}")
+        u = resp.usage_metadata
+        captured["in"] = getattr(u, "prompt_token_count", 0) or 0
+        captured["out"] = getattr(u, "candidates_token_count", 0) or 0
         return resp.parsed
 
-    return _with_retry(call, label="stage1", on_event=on_event)
+    parsed = _with_retry(call, label="stage1", on_event=on_event)
+    entry = CostEntry(
+        stage="stage1",
+        model=STAGE1_MODEL,
+        input_tokens=captured.get("in", 0),
+        output_tokens=captured.get("out", 0),
+        cost_usd=estimate_cost_usd(STAGE1_MODEL, captured.get("in", 0), captured.get("out", 0)),
+    )
+    return parsed, entry
 
 
 def stage2_relevance(
@@ -254,7 +299,7 @@ def stage2_relevance(
     *,
     client: genai.Client | None = None,
     on_event: Callable[[str], None] | None = None,
-) -> Stage2Result:
+) -> tuple[Stage2Result, CostEntry]:
     c = client or _client()
     profile_yaml = yaml.safe_dump(product_profile, sort_keys=False)
     tags_json = tags.model_dump_json(indent=2)
@@ -267,6 +312,7 @@ def stage2_relevance(
         "# Bulletin text\n"
         f"{bulletin_text}\n"
     )
+    captured: dict = {}
 
     def call() -> Stage2Result:
         resp = c.models.generate_content(
@@ -281,9 +327,20 @@ def stage2_relevance(
         )
         if resp.parsed is None:
             raise RuntimeError(f"stage2: parsing failed. Raw text: {resp.text!r}")
+        u = resp.usage_metadata
+        captured["in"] = getattr(u, "prompt_token_count", 0) or 0
+        captured["out"] = getattr(u, "candidates_token_count", 0) or 0
         return resp.parsed
 
-    return _with_retry(call, label="stage2", on_event=on_event)
+    parsed = _with_retry(call, label="stage2", on_event=on_event)
+    entry = CostEntry(
+        stage="stage2",
+        model=STAGE2_MODEL,
+        input_tokens=captured.get("in", 0),
+        output_tokens=captured.get("out", 0),
+        cost_usd=estimate_cost_usd(STAGE2_MODEL, captured.get("in", 0), captured.get("out", 0)),
+    )
+    return parsed, entry
 
 
 def classify_bulletin(
@@ -295,8 +352,10 @@ def classify_bulletin(
     on_event: Callable[[str], None] | None = None,
 ) -> ClassificationResult:
     c = client or _client()
-    tags = stage1_tag(bulletin_text, client=c, on_event=on_event)
-    relevance = stage2_relevance(
+    tags, cost1 = stage1_tag(bulletin_text, client=c, on_event=on_event)
+    relevance, cost2 = stage2_relevance(
         bulletin_text, tags, product_profile, client=c, on_event=on_event
     )
-    return ClassificationResult(bulletin_id=bulletin_id, tags=tags, relevance=relevance)
+    return ClassificationResult(
+        bulletin_id=bulletin_id, tags=tags, relevance=relevance, cost=[cost1, cost2]
+    )

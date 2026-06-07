@@ -158,11 +158,18 @@ with m3:
 with m4:
     val = metrics.get("f1")
     st.metric("F1", f"{val:.2f}" if val is not None else "—")
+cost_usd = eval_data.get("total_cost_usd")
 caption = (
     f"Latest eval run: `{run_at}` UTC — tenant `{tenant_slug}`. "
     "Results are pre-computed and committed; the dashboard does not "
     "hit the LLM API on page load."
 )
+if cost_usd is not None:
+    caption += (
+        f" **Run cost: ${cost_usd:.4f}** (~₹{cost_usd * 84:.2f}). "
+        f"Per-run budget cap ${eval_data.get('budget_cap_usd', 0.50):.2f}; "
+        "hard-aborts the eval if exceeded."
+    )
 if errored:
     caption += (
         f" **{errored} bulletins pending** — Gemini free tier caps both "
@@ -507,15 +514,29 @@ with tab_eval:
     st.dataframe(vdf, hide_index=True, use_container_width=True)
 
     st.markdown(
-        "**Eval limits.** The corpus is small and Visa-only — 10 clear "
-        "bulletins + 6 adversarial ones designed around specific failure "
-        "modes. Synthesized from public Visa programs with sourcing "
-        "transparency. Numbers should be read as 'does this architecture "
-        "hold up under adversarial pressure on a small set,' not as a SOTA "
-        "claim. Next iteration: 30+ bulletins across Visa, Mastercard, and "
-        "RBI, plus cross-network sanity checks (a Visa-tuned classifier "
-        "applied to a Mastercard bulletin should still classify correctly "
-        "or fail loudly — not silently confabulate)."
+        "**Eval limits — read this before quoting the numbers.** "
+        "The corpus is small and Visa-only: 10 clear + 6 adversarial "
+        "bulletins, synthesized from public Visa programs.\n\n"
+        "**A real honesty caveat on the adversarial cohort.** I authored "
+        "the bulletins. Despite the failure-mode design, most adversarial "
+        "bulletins still contain phrases like *'such as payment "
+        "orchestrators'* or *'No action is required for payment "
+        "orchestrators'* — the classifier sometimes finds the answer in "
+        "the body rather than reasoning about it. The next iteration "
+        "needs either (a) real Visa Business News bulletins (acquisition: "
+        "request access via a Visa member bank's portal), or (b) a "
+        "bulletin re-writer that strips out explicit orchestrator-role "
+        "mentions while preserving the operational signal — leaving only "
+        "the bulletin's vocabulary, message-format references, and rule "
+        "structure for the model to reason about. Without one of those "
+        "two upgrades, the adversarial row above is suggestive but not "
+        "fully load-bearing.\n\n"
+        "Other next-iteration upgrades: 30+ bulletins across Visa, "
+        "Mastercard, and RBI; cross-network sanity checks (a Visa-tuned "
+        "classifier applied to a Mastercard bulletin should still "
+        "classify correctly or fail loudly — not silently confabulate); "
+        "calibration metrics on confidence (the model currently returns "
+        "1.00 on essentially every call)."
     )
 
 

@@ -28,6 +28,14 @@ from src.ingest import iter_bulletins  # noqa: E402
 from src.tenant import load_tenant  # noqa: E402
 from src.tenant.loader import PROJECT_ROOT, load_product_profile  # noqa: E402
 
+import os  # noqa: E402
+
+# Hard per-run dollar cap so a runaway eval can't burn the month's budget in
+# one go. The user-stated monthly cap is INR 100 (~$1.20); we default the
+# per-run cap to $0.50 — generous for any single eval at Flash-Lite or Flash,
+# tight enough that a misconfigured Pro run aborts before damage.
+USD_BUDGET_PER_RUN = float(os.environ.get("COMPLY_USD_BUDGET", "0.50"))
+
 load_dotenv(PROJECT_ROOT / ".env")
 console = Console()
 
@@ -75,6 +83,9 @@ def main() -> int:
     consecutive_429s = 0
     CIRCUIT_BREAKER = 2  # bulletins back-to-back failing on first attempt
     circuit_tripped = False
+    cumulative_cost_usd = 0.0
+    budget_tripped = False
+    _emit(f"[bold]Per-run USD budget cap: ${USD_BUDGET_PER_RUN:.2f}[/bold]")
 
     def _first_attempt_was_429(events: list[str]) -> bool:
         """Inspect the captured on_event lines to see if attempt 1 hit 429."""
@@ -119,7 +130,12 @@ def main() -> int:
                 on_event=_on_event,
             )
             elapsed = time.monotonic() - item_t0
-            _emit(f"   [green]✓ {elapsed:.1f}s[/green]  predicted={result.relevance.relevant}")
+            item_cost = result.total_cost_usd
+            cumulative_cost_usd += item_cost
+            _emit(
+                f"   [green]✓ {elapsed:.1f}s[/green]  predicted={result.relevance.relevant}  "
+                f"cost=${item_cost:.4f}  cum=${cumulative_cost_usd:.4f}"
+            )
             consecutive_429s = 0
             results.append({
                 "bulletin_id": bid,
@@ -131,8 +147,34 @@ def main() -> int:
                 "failure_mode": fm.get("failure_mode"),
                 "tags": result.tags.model_dump(),
                 "relevance": result.relevance.model_dump(),
+                "cost": [c.model_dump() for c in result.cost],
+                "cost_usd": item_cost,
                 "elapsed_s": round(elapsed, 2),
             })
+            if cumulative_cost_usd >= USD_BUDGET_PER_RUN:
+                budget_tripped = True
+                _emit(
+                    f"[red bold]Budget cap: cumulative spend ${cumulative_cost_usd:.4f} "
+                    f"≥ cap ${USD_BUDGET_PER_RUN:.2f} — aborting eval to protect spend.[/red bold]"
+                )
+                for j in range(i, len(bulletin_list)):
+                    p2, fm2, body2 = bulletin_list[j]
+                    bid2 = fm2.get("id", p2.stem)
+                    title2 = body2.splitlines()[0].lstrip("# ").strip() if body2 else ""
+                    if bid2 == bid:
+                        continue
+                    results.append({
+                        "bulletin_id": bid2,
+                        "file": str(p2.relative_to(PROJECT_ROOT)),
+                        "title": title2,
+                        "expected_relevance": fm2.get("expected_relevance"),
+                        "expected_priority": fm2.get("expected_priority"),
+                        "difficulty": fm2.get("difficulty"),
+                        "failure_mode": fm2.get("failure_mode"),
+                        "error": "skipped_by_budget_cap",
+                        "elapsed_s": 0.0,
+                    })
+                break
         except Exception as e:  # noqa: BLE001
             elapsed = time.monotonic() - item_t0
             _emit(f"   [red]✗ {type(e).__name__}: {str(e)[:120]}[/red]")
@@ -210,6 +252,9 @@ def main() -> int:
     summary.add_row("F1", f"{metrics.f1:.3f}" if metrics.f1 is not None else "—")
     summary.add_row("Accuracy", f"{metrics.accuracy:.3f}" if metrics.accuracy is not None else "—")
     summary.add_row("Total wall-clock", f"{time.monotonic() - overall_t0:.1f}s")
+    summary.add_row("Cumulative spend (USD)", f"${cumulative_cost_usd:.4f}")
+    summary.add_row("Cumulative spend (INR)", f"₹{cumulative_cost_usd * 84:.2f}")
+    summary.add_row("Budget cap (USD)", f"${USD_BUDGET_PER_RUN:.2f}")
     console.print(summary)
 
     detail = Table(title="Per-bulletin results", show_lines=True)
@@ -258,6 +303,10 @@ def main() -> int:
         "run_at_utc": ts,
         "metrics": metrics.as_dict(),
         "metrics_by_difficulty": by_difficulty,
+        "total_cost_usd": round(cumulative_cost_usd, 6),
+        "budget_cap_usd": USD_BUDGET_PER_RUN,
+        "budget_tripped": budget_tripped,
+        "circuit_tripped": circuit_tripped,
         "results": results,
     }, indent=2, default=str))
     _emit(f"[dim]eval artifact: {out_path.relative_to(PROJECT_ROOT)}[/dim]")
