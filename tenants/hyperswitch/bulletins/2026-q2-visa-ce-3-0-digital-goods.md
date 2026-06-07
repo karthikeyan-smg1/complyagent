@@ -35,13 +35,13 @@ Each signal must be carried in the structured `compelling_evidence_3_0_fields` b
 
 ## Who this is relevant to
 
-This expansion is directly operationally relevant to:
+This expansion is directly operationally relevant to anyone in the chargeback-defense path for in-app digital-goods or subscription merchants. To present CE 3.0 evidence, the pre-arbitration response pipeline must be extended to populate the four signal classes — device ID, IP, account identifier, prior-purchase or session signal — alongside the existing Visa Evidence Pack v4 transaction context. This requires:
 
-- Merchants offering in-app digital goods, subscriptions, or tier upgrades — to elect into CE 3.0 protection.
-- Acquirers and gateways that represent merchants in pre-arbitration responses — to extend their evidence-packet generation to populate the new signal classes for the in-app category.
-- Payment orchestrators that handle merchant-facing dispute lifecycle on behalf of subscription or digital-goods merchants — to extend their chargeback module to populate the four CE 3.0 signal classes during pre-arbitration response, retaining the device ID and merchant-side account identifier alongside the existing transaction context.
+1. Surfacing the device ID and merchant-side account identifier from the merchant's checkout context into the chargeback response, where today most pipelines carry only authorization-time data.
+2. Retaining the per-user transaction history (prior undisputed transactions from the same cardholder) for a sufficient window (at least 540 days from the original transaction) to support the "two prior undisputed transactions" requirement.
+3. Emitting the new `compelling_evidence_3_0_fields` block in the Visa Evidence Pack v4 envelope per dispute submitted under reason code 10.4 or 13.1.
 
-Without this update, merchants in the in-app digital-goods category will continue to face the higher (pre-CE-3.0) dispute loss rate. There is no rule penalty for not adopting CE 3.0, but the dispute economics make it operationally required for merchants in this category.
+Without this update, in-app digital-goods and subscription merchants will continue to face the higher (pre-CE-3.0) dispute loss rate. There is no rule penalty for not adopting CE 3.0, but the dispute economics make it operationally required for merchants in this category — and therefore for whichever party operates the chargeback lifecycle on their behalf.
 
 ## What this does not change
 
@@ -61,4 +61,4 @@ CE 3.0 is an evidence pattern, not a new rule. This expansion does not change:
 
 ## Action required
 
-Acquirers, gateways, and payment orchestrators handling chargeback lifecycle for merchants in the in-app digital-goods or subscription category should extend their evidence-packet generation to populate the four CE 3.0 signal classes for the in-app dispute pattern, to ensure their merchants qualify for the higher CE 3.0 dispute win rates from 1 September 2026.
+Whichever entity operates the pre-arbitration response pipeline for merchants in the in-app digital-goods or subscription category should extend its evidence-packet generation to populate the four CE 3.0 signal classes for the in-app dispute pattern, to ensure those merchants qualify for the higher CE 3.0 dispute win rates from 1 September 2026.

@@ -31,24 +31,11 @@ Participating issuing banks must:
 3. Implement the EMVCo-aligned tokenization for the recipient PAN where the recipient is on a network-token-enabled Visa card.
 4. Update fraud monitoring to incorporate the new OCT-specific risk signals provided by Visa Risk Manager.
 
-## Vocabulary used in this bulletin
-
-This bulletin discusses tokenization, 3DS authentication outcomes (for the sender-side authorization step), authorization_flow context (for the recipient credit), and recurring/scheduled disbursement series. The mentions are within the **sender / issuing bank context** — they describe what the issuing bank must do to originate compliant Visa Direct OCT transactions.
-
 ## Who this affects
 
-- **In scope:** Visa member issuing banks that elect to enrol in the expanded Visa Direct program; the corporate clients of those banks that originate B2C disbursements.
-- **Not in scope:** Merchant-side card acceptance, including in-store and online card acceptance; payment service providers, payment facilitators, gateways, and payment orchestrators operating in the merchant-acceptance capacity; cardholders receiving funds (no action required).
+The program is open to Visa member issuing banks that elect to enrol in the expanded Visa Direct OCT framework, and to the corporate clients of those banks that originate B2C disbursements (insurance carriers, gig-economy platforms, marketplace operators settling with their sellers, money-transfer operators).
 
-## What does not change
-
-For merchant-side acceptance flows on Visa rails:
-
-- ISO 8583 authorization message format for the merchant-acceptance leg.
-- 3DS authentication requirements at point of sale.
-- Stored-credential or recurring-billing tokenization requirements for merchant card-on-file.
-- Chargeback or dispute workflows.
-- Interchange Reimbursement Fee schedules.
+The enrolment, the operational requirements, and the new Visa Direct schema apply to the issuing-bank side of the Visa rails — the bank that originates the OCT credit transaction on behalf of its corporate client.
 
 ## Related references
 
@@ -58,4 +45,4 @@ For merchant-side acceptance flows on Visa rails:
 
 ## Action required
 
-Issuing banks interested in participating may contact their Visa account manager to begin enrolment. **For all merchant-side parties — acquirers, gateways, payment service providers, payment facilitators, and payment orchestrators — no action is required.** This program does not introduce any new acceptance-side rule or message-format requirement.
+Visa member issuing banks interested in participating in the expanded Visa Direct B2C program may contact their Visa Direct account manager to begin enrolment. Participating issuing banks must complete the OCT use-case identifier integration, the sender-side data submission, and the EMVCo recipient-PAN tokenization before originating compliant Visa Direct OCT transactions under the expanded program.

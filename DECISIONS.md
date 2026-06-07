@@ -177,3 +177,32 @@
 **What the budget guard does not do.** It does not enforce a *monthly* spend cap — that would require persistent state (e.g., a `~/.complyagent/spend-log.json` file). For a single-user prototype with a 30-second eval that costs ₹0.44, the per-run cap is sufficient. If multiple processes / cron-driven evals start sharing the same key, the monthly cap belongs in a wrapper or a separate spend-budgeter.
 
 **Anti-goal.** No automatic cost-saving model downgrade. If Stage-2 is configured to Pro and the run would exceed the cap, the run aborts — it does not silently swap to Flash-Lite. Surprises in eval reproducibility are worse than constraints.
+
+---
+
+## 2026-06-07 — Tightened adversarial bulletins: stripped role-mentions, model still 6/6
+
+**Decision.** Rewrite the 6 adversarial bulletins to remove every explicit *payment orchestrator / PSP / payment service provider / gateway* mention while preserving the operational signal (message-format references, surface vocabulary, rule structure). Re-run the eval. Surface whatever happens honestly — including a failure if the model breaks.
+
+**Why.** The previous eval result (16/16, precision and recall 1.000) was suspicious. Reading the per-bulletin reasoning revealed the classifier was citing phrases like "such as payment orchestrators" or "No action is required for payment orchestrators" — phrases I (the bulletin author) had unconsciously left in. The model was reading the answer, not reasoning to it. A perfect score on an eval where I gave away the answer is meaningless.
+
+**The rewrites.** Every adversarial bulletin now uses operationally-defined phrasing for the responsible party instead of role-names. Examples:
+
+- Visa Account Updater: *"any entity that holds the canonical stored-credential record for a merchant operating recurring billing or mandate-based card-on-file flows on Visa rails"* (instead of "acquirers and payment orchestrators").
+- UK SCA: *"the party that constructs and emits the UK-region card-not-present authorization request — whichever system holds the authentication-exemption flagging logic"* (instead of "acquirers, payment service providers, payment gateways, and payment orchestrators").
+- BASE II: removed the explicit "out of scope for payment orchestrators" callout entirely; left only "direct-connected acquiring banks, issuing banks, and processors must migrate."
+- Visa Direct B2C: removed the "no action required for merchant-side parties — acquirers, gateways, PSPs, orchestrators" enumeration; the bulletin now only specifies what issuing banks must do.
+
+A grep across all 6 adversarial bulletins now returns **zero matches** for `orchestrator|PSP|payment service provider|gateway`. The model has no keyword shortcut left.
+
+**Result.** On the tightened set, the classifier still classified all 6 adversarial bulletins correctly (3 relevant + 3 not-relevant, all matching the hand-labels). The per-bulletin reasoning is qualitatively different from the first run: instead of citing role-names, it cites *profile surface names* and connects them to specific operational changes in the bulletin. Examples:
+
+- Account Updater (relevant): *"The product profile supports `tokenization_and_network_tokens` and `recurring_payments` surfaces, which are directly impacted by the need to handle updated network tokens and refresh stored credentials."*
+- BASE II (not_relevant): *"The product profile does not indicate direct connectivity to Visa's clearing network... The affected surface `settlement_and_reconciliation` is not directly impacted as the product does not appear to be a direct-connected institution."*
+- Visa Direct B2C (not_relevant): *"The target product, Hyperswitch, is an orchestrator that handles transactions at the merchant acceptance flow, not on the issuing bank side."*
+
+This is the reasoning chain the two-stage architecture is supposed to demonstrate: read the bulletin, read the product profile, decide whether the operational changes apply to surfaces the product supports.
+
+**What this still does not prove.** A 6-bulletin adversarial cohort is too small to claim a calibrated model. Confidence is saturated at 1.00 on every call — there is no spread to suggest the model is differentiating its certainty. No cross-network test has been run (a Visa-tuned classifier applied to a Mastercard or RBI bulletin may confabulate). These remain on the roadmap.
+
+**Cost.** Full 16-bulletin re-eval after the rewrites cost **$0.0052 (~₹0.44)** — same as the previous run. Cumulative spend today on the project remains under $0.02 (~₹2). Hard per-run cap at $0.50 protected us throughout.

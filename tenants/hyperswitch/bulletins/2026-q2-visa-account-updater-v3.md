@@ -31,20 +31,17 @@ The v3.0 specification:
 3. **Network-token (DPAN) refresh.** Where the original stored credential was a network token rather than a raw PAN, the v3.0 event carries the corresponding DPAN refresh information (cryptogram regeneration trigger, new TRID assignment).
 4. **Acknowledgement and replay.** Subscribers must acknowledge each delivered event; missed events are replayed for up to 7 days through the v3.0 replay endpoint.
 
-## Who must act
+## Who must integrate
 
-The VAU service is offered to **acquiring banks** (and to certain large merchant aggregators with direct VAU subscriptions). Acquirers in turn typically integrate VAU on behalf of their merchants — passing the refreshed PAN or DPAN data back to whichever system maintains the merchant's card-on-file vault.
+The VAU service is subscribed to by acquiring banks under Visa's program rules; the bulletin therefore uses "acquirer" throughout. In typical merchant-side topology, the acquirer delegates the operational consumption of VAU events — receiving the refreshed PAN or DPAN and writing it back into the canonical merchant card-on-file ledger — to whichever system runs the stored-credential lifecycle for the merchant's recurring-billing flow. That system is required to update its VAU consumer to v3.0 by the deadline, irrespective of which party in the merchant-acceptance topology operates it. In practice that means:
 
-In practice, the entity that integrates with VAU on the acquirer's behalf is usually:
-
-- The acquirer's own internal vault, OR
-- A merchant-facing **payment service provider, gateway, or payment orchestrator** that maintains the canonical card-on-file record for the merchant's recurring-billing or stored-credential flows.
-
-The bulletin language uses "acquirer" throughout because the acquiring bank is the formal VAU subscriber under Visa's program rules. However, any entity that operationally consumes VAU output to refresh stored credentials in a merchant's card-on-file ledger is functionally an integration party and must update its VAU consumer to v3.0 by the deadline. This includes payment service providers and orchestrators that operate the stored-credential refresh path for their merchant clients on behalf of the acquirer.
+1. Any entity that holds the canonical stored-credential record for a merchant operating recurring billing or mandate-based card-on-file flows on Visa rails.
+2. Any entity that performs the network-token (DPAN) refresh handoff into the Visa Token Service when the stored credential is a token.
+3. Any entity whose chargeback or MIT-retry pipeline depends on the stored-credential record staying fresh.
 
 ## What integration parties must do
 
-By the effective date, VAU integration parties must:
+By the effective date, every party performing one or more of the three roles above must:
 
 1. Implement the v3.0 webhook receiver (HTTPS, signed payloads, 30-second ACK SLA).
 2. Map all five v3.0 event types into the stored-credential ledger update path.
@@ -53,7 +50,7 @@ By the effective date, VAU integration parties must:
 
 ## Penalty for non-migration
 
-After 31 December 2026, the v2 endpoint will return HTTP 410 Gone. Stored credentials will silently go stale, leading to elevated MIT authorization failure rates on stale stored PANs/DPANs. Visa will surface affected acquirer accounts on the monthly Acquirer Quality Index report; sustained stale-credential rates may trigger Acquirer Compliance Assessment action.
+After 31 December 2026, the v2 endpoint will return HTTP 410 Gone. Stored credentials will silently go stale, leading to elevated MIT authorization failure rates on stale stored PANs/DPANs. Visa will surface affected acquirer accounts on the monthly Acquirer Quality Index report; sustained stale-credential rates may trigger Acquirer Compliance Assessment action against the acquirer, which will in turn pass the obligation downstream.
 
 ## Related references
 
@@ -63,4 +60,4 @@ After 31 December 2026, the v2 endpoint will return HTTP 410 Gone. Stored creden
 
 ## Action required
 
-VAU integration parties — acquirers and the merchant-facing card-on-file operators acting on their behalf — must migrate to the v3.0 webhook integration and decommission the legacy v2 consumer before 31 December 2026.
+Whichever entity operationally holds the canonical merchant card-on-file record and the stored-credential lifecycle for Visa recurring-billing flows must migrate to the v3.0 webhook integration and decommission the legacy v2 consumer before 31 December 2026.

@@ -24,13 +24,13 @@ This is an **infrastructure migration on Visa's clearing-network side**. It gove
 
 ## Who must migrate
 
-The institutions that maintain a direct BASE II connection to Visa are:
+BASE II is a direct connection between an institution and Visa's clearing network. The institutions that hold a BASE II credential, and therefore must perform the endpoint migration, are:
 
 - **Direct-connected acquiring banks** — banks that submit their merchants' clearing records to Visa directly via BASE II.
 - **Direct-connected issuing banks** — banks that consume Visa-side clearing records for their cardholder accounts.
 - **Direct-connected processors** — third-party processors (e.g., FIS, Fiserv, Worldpay, TSYS, Visa DPS) that operate a BASE II connection on behalf of an acquiring or issuing bank.
 
-These are the only parties with a BASE II credential at all. Each of them must:
+These institutions must:
 
 1. Update their BASE II client configuration to point at the new TLS 1.3 endpoint.
 2. Provision new TLS client certificates issued via the Visa Certificate Authority before the legacy endpoint sunset.
@@ -38,25 +38,15 @@ These are the only parties with a BASE II credential at all. Each of them must:
 
 ## What does not change
 
-The BASE II endpoint migration does not change:
+The endpoint migration does not change:
 
 - ISO 8583 authorization message format.
 - Clearing record (TC 05, 06, 07) content or schema.
 - The authorization, settlement, or chargeback business logic that produces clearing records.
 - 3DS authentication, tokenization, or stored-credential handling at point of sale.
-- Any merchant-side acceptance flow.
-- Any orchestration, routing, or PSP/gateway processing that runs upstream of the acquirer.
+- Any acceptance-side processing that runs upstream of the BASE II handoff.
 
-A payment orchestrator routes authorization traffic to an acquirer; the acquirer (or the acquirer's processor) is the entity holding the BASE II connection and submitting clearing records to Visa. The orchestrator's settlement-and-reconciliation surface deals with reconciling acquirer-reported settlement totals against its own merchant ledger — it does not connect to BASE II directly and therefore has no migration to perform.
-
-## Who does not need to act
-
-The following parties are explicitly out of scope of this migration because they do not hold a BASE II connection:
-
-- Payment service providers, payment facilitators, gateways, and payment orchestrators routing to acquirers.
-- Merchants and their checkout systems.
-- Cardholder-facing wallets.
-- Any party in the merchant-acceptance side of the transaction that is not itself a BASE-II-direct-connected institution.
+The migration is a connection-layer change, not a business-rule or message-format change.
 
 ## Related references
 
@@ -66,4 +56,4 @@ The following parties are explicitly out of scope of this migration because they
 
 ## Action required
 
-Direct-connected acquirers, issuers, and their processors must complete the BASE II endpoint migration before 31 March 2027. **No action is required for payment orchestrators, gateways, PSPs, merchants, or any party that connects to Visa indirectly via an acquirer's BASE II connection.**
+Direct-connected acquirers, issuers, and their direct-connected processors must complete the BASE II endpoint migration before 31 March 2027 to maintain their clearing-record exchange with Visa.

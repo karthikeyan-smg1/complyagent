@@ -31,18 +31,18 @@ For Visa card-not-present transactions where the cardholder's issuer is UK-domic
 3. **TRA exemption ceiling.** The UK-specific TRA exemption ceiling rises to £500 (vs the EU's €500), with a UK-region cumulative monthly TRA exemption cap of £1,250 per cardholder.
 4. **EU-region cards transacting on UK merchants.** For an EU-region card transacting at a UK merchant, the EU PSD2/PSR2 exemption schema continues to apply (issuer is EU; the EU regime governs). For a UK-region card transacting at an EU merchant, the EU PSD2/PSR2 exemption schema applies (issuer is EU-affected because UK card with EU merchant — but issuer is UK; the UK regime governs the issuer's evaluation, while the EU PSR2 acquirer-side rules continue to apply at the merchant location).
 
-## The framing in this bulletin
+## How the rule lands on the acceptance side
 
-The bulletin is primarily directed at **Visa issuers** — it describes how issuers must evaluate the new UK exemption flags and how the issuer-side step-up logic interacts with the FCA rules. The word "issuer" appears throughout.
+The bulletin is primarily directed at Visa issuers — it describes how UK issuers must evaluate the new UK exemption flags and how the issuer-side step-up logic interacts with the FCA rules. The word "issuer" appears throughout.
 
-However, the merchant-side acceptance flow on UK-region transactions must surface and populate the new exemption flags correctly. The acquiring bank, payment service provider, payment gateway, or payment orchestrator routing UK-region card-not-present authorizations:
+The acceptance-side counterpart is implicit but unavoidable: for the new UK exemption codes (`UK-LV` and `UK-MIRC`) to ever reach the issuer's evaluation logic, the acceptance-side authorization request must populate them when the conditions are met. The party that constructs and emits the UK-region card-not-present authorization request — whichever system holds the authentication-exemption flagging logic, the 3DS authentication request construction, and the merchant-side fraud-rule engine — must:
 
-- Must extend its authentication-exemption flagging logic to emit the new `UK-LV` and `UK-MIRC` codes when the conditions are met.
-- Must update its 3DS authentication request construction to surface the UK exemption schema correctly to the issuer.
-- Must reflect the new TRA exemption thresholds in its fraud-rule engine where TRA exemptions are claimed merchant-side.
-- Must update its authorization-flow handling to distinguish UK-region from EU-region transactions correctly when populating exemption flags.
+- Extend its authentication-exemption flagging logic to emit the new `UK-LV` and `UK-MIRC` codes when the conditions are met.
+- Update its 3DS authentication request construction to surface the UK exemption schema correctly to the issuer.
+- Reflect the new TRA exemption thresholds in its fraud-rule engine where TRA exemptions are claimed merchant-side.
+- Distinguish UK-region from EU-region transactions correctly when populating exemption flags in the authorization flow.
 
-Without these merchant-side changes, UK-region transactions will be flagged as ineligible for the new UK exemptions, and the merchant will see elevated 3DS step-up rates and the resulting checkout friction.
+Without these acceptance-side changes, UK-region transactions will be flagged as ineligible for the new UK exemptions, and the merchant will see elevated 3DS step-up rates and the resulting checkout friction.
 
 ## What does not change
 
@@ -56,4 +56,4 @@ For non-UK-region transactions, the EU PSD2/PSR2 regime continues unchanged. The
 
 ## Action required
 
-Acquirers, payment service providers, payment gateways, and payment orchestrators that handle UK-region card-not-present authorization traffic must implement the new UK exemption schema, the UK TRA exemption ceiling, and the UK-vs-EU region routing logic before 1 January 2027.
+Whichever entity constructs the merchant-side authorization request for UK-region card-not-present traffic must implement the new UK exemption schema, the UK TRA exemption ceiling, and the UK-vs-EU region routing logic before 1 January 2027.

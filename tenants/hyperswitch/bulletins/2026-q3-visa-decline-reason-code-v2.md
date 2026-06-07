@@ -30,14 +30,14 @@ For example, where today an authorization decline returns `Field 39 = 05` (Do no
 
 Consumption of the new sub-codes is **entirely optional**. The Visa rules around this expansion explicitly state:
 
-1. Existing authorization-decline handling on the merchant-acceptance side **continues to work identically** to today. Acquirers, gateways, payment service providers, payment orchestrators, and merchants that parse only the primary `Field 39` code will see no change in behavior.
-2. There is **no acceptance-side parsing requirement** for the new sub-codes. No rule requires any merchant-side party to read, log, surface, or act on Field 39.2.
+1. Existing authorization-decline handling on the merchant-acceptance side **continues to work identically** to today. Any system that parses only the primary `Field 39` code will see no change in behavior.
+2. There is **no acceptance-side parsing requirement** for the new sub-codes. No rule requires the merchant-acceptance side to read, log, surface, or act on Field 39.2.
 3. There is **no impact on the decline-decision itself**. The primary response code semantics are unchanged. A `05` is still a `05`; a `51` is still a `51`. Retry, fallback, and re-authorization logic that operates off the primary response code continues to work unchanged.
 4. The sub-codes carry **no penalty for non-consumption**. There is no compliance assessment, no Acquirer Quality Index impact, and no Visa rule that requires consumption.
 
 ## Why the sub-codes exist (informational)
 
-The new sub-codes are an analytics and merchant-experience improvement: acquirers or orchestrators that *choose* to consume them can surface richer failure reasons to merchant dashboards, drive better retry strategies based on the specific failure type, and feed more granular fraud-system telemetry. This is a value-add feature, not a rule change.
+The new sub-codes are an analytics and merchant-experience improvement: any system that *chooses* to consume them can surface richer failure reasons to merchant dashboards, drive better retry strategies based on the specific failure type, and feed more granular fraud-system telemetry. This is a value-add feature, not a rule change.
 
 ## What does not change
 
@@ -57,4 +57,4 @@ This expansion does not change:
 
 ## Action required
 
-**No action is required by any party** to remain in compliance with Visa rules. Acquirers, gateways, payment orchestrators, and merchants that wish to consume the additional sub-code detail for analytics, retry strategy, or merchant-dashboard purposes may optionally integrate the new sub-codes. This is a voluntary feature consumption, not a rule change.
+**No action is required by any party** to remain in compliance with Visa rules. Any system that wishes to consume the additional sub-code detail for analytics, retry strategy, or merchant-dashboard purposes may optionally integrate the new sub-codes. This is a voluntary feature consumption, not a rule change.
