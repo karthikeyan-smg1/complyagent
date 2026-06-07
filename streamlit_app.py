@@ -137,10 +137,18 @@ results = eval_data.get("results", [])
 run_at = eval_data.get("run_at_utc", "—")
 
 
-# Top-of-page strip with the four headline metrics
+# Top-of-page strip with headline metrics
+corpus_total = metrics.get("total", 0)
+classified = metrics.get("labeled", 0)
+errored = metrics.get("errored", 0)
 m1, m2, m3, m4 = st.columns(4)
 with m1:
-    st.metric("Bulletins evaluated", metrics.get("labeled", 0))
+    st.metric(
+        "Classified / Corpus",
+        f"{classified} / {corpus_total}",
+        delta=f"{errored} pending re-run" if errored else None,
+        delta_color="off",
+    )
 with m2:
     val = metrics.get("precision")
     st.metric("Precision (relevant)", f"{val:.0%}" if val is not None else "—")
@@ -150,9 +158,19 @@ with m3:
 with m4:
     val = metrics.get("f1")
     st.metric("F1", f"{val:.2f}" if val is not None else "—")
-st.caption(f"Latest eval run: `{run_at}` UTC — tenant `{tenant_slug}`. "
-           "Results are pre-computed and committed; the dashboard does not "
-           "hit the LLM API on page load.")
+caption = (
+    f"Latest eval run: `{run_at}` UTC — tenant `{tenant_slug}`. "
+    "Results are pre-computed and committed; the dashboard does not "
+    "hit the LLM API on page load."
+)
+if errored:
+    caption += (
+        f" **{errored} bulletins pending** — Gemini free tier caps both "
+        "`gemini-2.5-flash` and `gemini-2.5-flash-lite` at 20 requests/day "
+        "on this account. Re-run pending the daily quota reset (00:00 PT) "
+        "or a billing enablement."
+    )
+st.caption(caption)
 
 
 # ----------------------------------------------------------------------------
@@ -361,13 +379,20 @@ with tab_inbox:
 with tab_eval:
     st.markdown("## Classifier evaluation")
     st.markdown(
-        "Eval framework: each bulletin in the corpus carries a hand-labeled "
-        "`expected_relevance` in its frontmatter. The classifier runs over the "
-        "full corpus; precision / recall / F1 are computed against those "
-        "labels with `relevant` as the positive class."
+        "**Eval methodology.** Every bulletin carries a hand-labeled "
+        "`expected_relevance` *and* a `difficulty` band — `clear` for "
+        "bulletins where the body itself states applicability ('orchestrators "
+        "must…' or 'no action required for orchestrators'), and "
+        "`adversarial` for bulletins designed around specific failure modes: "
+        "surface vocabulary overlap, jurisdiction edges, "
+        "acquirer-vs-orchestrator wording, and optional-vs-mandatory "
+        "ambiguity. The stratified view below lets you see how the model "
+        "performs on each cohort separately. Perfect numbers on the clear "
+        "cohort would be unremarkable — the adversarial cohort is the test "
+        "that matters."
     )
 
-    g1, g2, g3, g4 = st.columns(4)
+    g1, g2, g3, g4, g5 = st.columns(5)
     with g1:
         st.metric("True positives", metrics.get("true_positive", 0))
     with g2:
@@ -376,6 +401,15 @@ with tab_eval:
         st.metric("True negatives", metrics.get("true_negative", 0))
     with g4:
         st.metric("False negatives", metrics.get("false_negative", 0))
+    with g5:
+        st.metric(
+            "Errored / pending",
+            metrics.get("errored", 0),
+            help="Bulletins not yet classified because the Gemini free-tier "
+                 "daily quota was exhausted mid-run. Excluded from precision "
+                 "and recall (an infrastructure failure is not a model "
+                 "judgement).",
+        )
 
     st.markdown("### Confusion matrix")
     cm = pd.DataFrame(
@@ -410,10 +444,41 @@ with tab_eval:
     )
     st.dataframe(head, use_container_width=True, hide_index=True)
 
+    by_difficulty = eval_data.get("metrics_by_difficulty") or {}
+    if by_difficulty:
+        st.markdown("### Stratified by difficulty")
+        st.caption(
+            "If overall metrics hide an adversarial weakness — clear-cohort "
+            "TPs and TNs floating up the headline — the adversarial row "
+            "surfaces it. This is the row a hiring manager should weight."
+        )
+        strat_rows = []
+        for d, m in by_difficulty.items():
+            strat_rows.append({
+                "Difficulty": d,
+                "Corpus n": m.get("n"),
+                "Classified": m.get("labeled"),
+                "Errored": m.get("errored"),
+                "TP": m.get("true_positive"),
+                "FP": m.get("false_positive"),
+                "TN": m.get("true_negative"),
+                "FN": m.get("false_negative"),
+                "Precision": f"{m['precision']:.3f}" if m.get("precision") is not None else "—",
+                "Recall": f"{m['recall']:.3f}" if m.get("recall") is not None else "—",
+                "F1": f"{m['f1']:.3f}" if m.get("f1") is not None else "—",
+                "Accuracy": f"{m['accuracy']:.3f}" if m.get("accuracy") is not None else "—",
+            })
+        # Sort: clear first, then adversarial, then anything else alphabetically
+        order = {"clear": 0, "borderline": 1, "adversarial": 2}
+        strat_rows.sort(key=lambda r: (order.get(r["Difficulty"], 99), r["Difficulty"]))
+        st.dataframe(pd.DataFrame(strat_rows), use_container_width=True, hide_index=True)
+
     st.markdown("### Per-bulletin verdicts")
     verdict_rows = []
     for r in results:
-        if r.get("error"):
+        if r.get("error") == "skipped_by_circuit_breaker":
+            verdict = "SKIPPED"
+        elif r.get("error"):
             verdict = "ERR"
         else:
             rel = r.get("relevance", {}).get("relevant")
@@ -431,22 +496,26 @@ with tab_eval:
         verdict_rows.append({
             "bulletin_id": r["bulletin_id"],
             "title": r.get("title", ""),
+            "difficulty": r.get("difficulty") or "—",
+            "failure_mode": r.get("failure_mode") or "—",
             "expected": r.get("expected_relevance") or "—",
             "predicted": r.get("relevance", {}).get("relevant"),
             "verdict": verdict,
             "confidence": r.get("relevance", {}).get("confidence"),
-            "elapsed_s": r.get("elapsed_s"),
         })
     vdf = pd.DataFrame(verdict_rows)
     st.dataframe(vdf, hide_index=True, use_container_width=True)
 
     st.markdown(
-        "**Eval limits.** The current corpus is small (10 bulletins, Visa only) "
-        "and synthesized from public Visa programs — this is a sanity check on "
-        "the two-stage architecture, not a SOTA claim. The next iteration "
-        "expands to 30+ bulletins across Visa, Mastercard, and RBI, and adds "
-        "borderline cases (opt-in regulatory programs, partial-jurisdiction "
-        "rules) where calibration matters."
+        "**Eval limits.** The corpus is small and Visa-only — 10 clear "
+        "bulletins + 6 adversarial ones designed around specific failure "
+        "modes. Synthesized from public Visa programs with sourcing "
+        "transparency. Numbers should be read as 'does this architecture "
+        "hold up under adversarial pressure on a small set,' not as a SOTA "
+        "claim. Next iteration: 30+ bulletins across Visa, Mastercard, and "
+        "RBI, plus cross-network sanity checks (a Visa-tuned classifier "
+        "applied to a Mastercard bulletin should still classify correctly "
+        "or fail loudly — not silently confabulate)."
     )
 
 

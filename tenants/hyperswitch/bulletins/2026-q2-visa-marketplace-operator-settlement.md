@@ -6,6 +6,7 @@ date: 2026-04-22
 network: visa
 mandatory: true
 synthesized: true
+difficulty: clear
 expected_relevance: not_relevant
 expected_priority: null
 ---

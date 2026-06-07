@@ -46,7 +46,7 @@ def _refresh_ground_truth_csv(rows: list[dict], path: Path) -> None:
     """Rewrite ground_truth.csv from the bulletin frontmatter."""
     cols = [
         "bulletin_id", "file_path", "source", "network", "date",
-        "title", "relevant", "priority", "notes",
+        "title", "relevant", "priority", "difficulty", "failure_mode", "notes",
     ]
     with path.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols)
@@ -73,7 +73,19 @@ def main() -> int:
     results: list[dict] = []
     ground_truth_rows: list[dict] = []
     consecutive_429s = 0
-    CIRCUIT_BREAKER = 3  # abort after this many back-to-back 429-driven failures
+    CIRCUIT_BREAKER = 2  # bulletins back-to-back failing on first attempt
+    circuit_tripped = False
+
+    def _first_attempt_was_429(events: list[str]) -> bool:
+        """Inspect the captured on_event lines to see if attempt 1 hit 429."""
+        for e in events:
+            if "attempt 1/" in e and "sent" in e:
+                continue
+            if "RESOURCE_EXHAUSTED" in e or "429" in e:
+                return True
+            if "ok in" in e:
+                return False
+        return False
 
     for i, (path, fm, body) in enumerate(bulletin_list, start=1):
         bid = fm.get("id", path.stem)
@@ -89,14 +101,22 @@ def main() -> int:
             "title": title,
             "relevant": fm.get("expected_relevance", ""),
             "priority": fm.get("expected_priority") or "",
+            "difficulty": fm.get("difficulty") or "",
+            "failure_mode": fm.get("failure_mode") or "",
             "notes": "synthesized=true" if fm.get("synthesized") else "",
         })
 
         item_t0 = time.monotonic()
+        captured_events: list[str] = []
+
+        def _on_event(m: str) -> None:
+            captured_events.append(m)
+            _emit(f"   [dim]{m}[/dim]")
+
         try:
             result = classify_bulletin(
                 bid, body, profile,
-                on_event=lambda m: _emit(f"   [dim]{m}[/dim]"),
+                on_event=_on_event,
             )
             elapsed = time.monotonic() - item_t0
             _emit(f"   [green]✓ {elapsed:.1f}s[/green]  predicted={result.relevance.relevant}")
@@ -107,6 +127,8 @@ def main() -> int:
                 "title": title,
                 "expected_relevance": fm.get("expected_relevance"),
                 "expected_priority": fm.get("expected_priority"),
+                "difficulty": fm.get("difficulty"),
+                "failure_mode": fm.get("failure_mode"),
                 "tags": result.tags.model_dump(),
                 "relevance": result.relevance.model_dump(),
                 "elapsed_s": round(elapsed, 2),
@@ -123,23 +145,54 @@ def main() -> int:
                 "title": title,
                 "expected_relevance": fm.get("expected_relevance"),
                 "expected_priority": fm.get("expected_priority"),
+                "difficulty": fm.get("difficulty"),
+                "failure_mode": fm.get("failure_mode"),
                 "error": f"{type(e).__name__}: {e}",
                 "elapsed_s": round(elapsed, 2),
             })
-            if consecutive_429s >= CIRCUIT_BREAKER:
+            circuit_tripped = consecutive_429s >= CIRCUIT_BREAKER
+            if circuit_tripped:
                 _emit(
                     f"[red bold]Circuit breaker: {CIRCUIT_BREAKER} consecutive "
-                    f"429 failures — aborting eval.[/red bold]"
+                    f"429-driven failures — aborting eval.[/red bold]"
                 )
-                _emit("[yellow]Likely causes: (1) per-minute quota still cooling; "
-                      "(2) per-day quota hit; (3) account in 60s+ penalty window. "
-                      "Wait ~5 min and retry, or enable Gemini billing.[/yellow]")
+                _emit("[yellow]Likely causes: (1) per-day quota hit "
+                      "(both gemini-2.5-flash and gemini-2.5-flash-lite "
+                      "cap at 20 requests/day on free tier); (2) per-minute "
+                      "quota still cooling. Wait for the daily reset "
+                      "(00:00 Pacific) or enable Gemini billing.[/yellow]")
+                # Record the un-attempted bulletins so the corpus total is honest
+                for j in range(i, len(bulletin_list)):
+                    p2, fm2, body2 = bulletin_list[j]
+                    bid2 = fm2.get("id", p2.stem)
+                    title2 = body2.splitlines()[0].lstrip("# ").strip() if body2 else ""
+                    results.append({
+                        "bulletin_id": bid2,
+                        "file": str(p2.relative_to(PROJECT_ROOT)),
+                        "title": title2,
+                        "expected_relevance": fm2.get("expected_relevance"),
+                        "expected_priority": fm2.get("expected_priority"),
+                        "difficulty": fm2.get("difficulty"),
+                        "failure_mode": fm2.get("failure_mode"),
+                        "error": "skipped_by_circuit_breaker",
+                        "elapsed_s": 0.0,
+                    })
                 break
 
     metrics = compute_metrics(
         (r.get("expected_relevance"), r.get("relevance", {}).get("relevant"))
         for r in results
     )
+    # Stratify by difficulty so reviewers can see headline vs adversarial.
+    by_difficulty: dict[str, dict] = {}
+    seen_difficulties = sorted({(r.get("difficulty") or "unspecified") for r in results})
+    for d in seen_difficulties:
+        subset = [r for r in results if (r.get("difficulty") or "unspecified") == d]
+        m = compute_metrics(
+            (r.get("expected_relevance"), r.get("relevance", {}).get("relevant"))
+            for r in subset
+        )
+        by_difficulty[d] = m.as_dict() | {"n": len(subset)}
 
     # Confusion matrix and per-bulletin breakdown
     console.print()
@@ -204,6 +257,7 @@ def main() -> int:
         "tenant": args.tenant_slug,
         "run_at_utc": ts,
         "metrics": metrics.as_dict(),
+        "metrics_by_difficulty": by_difficulty,
         "results": results,
     }, indent=2, default=str))
     _emit(f"[dim]eval artifact: {out_path.relative_to(PROJECT_ROOT)}[/dim]")

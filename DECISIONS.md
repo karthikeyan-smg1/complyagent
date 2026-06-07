@@ -134,3 +134,28 @@
 **Alternative considered.** Per-visitor secrets via Streamlit Cloud's user-supplied secrets pattern (visitor pastes their own key). Rejected — adds friction at the top of the demo funnel and the audience is hiring managers, not power users.
 
 **Implication for the next iteration.** The GitHub Actions cron (Roadmap §1) is the eval-refresh mechanism. Each cron run = new bulletins ingested → classifier re-run → `latest-eval.json` committed → Streamlit Cloud redeploys automatically. Dashboard freshness is bounded by cron interval, not by visitor interaction.
+
+---
+
+## 2026-06-07 — Stratified eval corpus: 10 clear + 6 adversarial bulletins
+
+**Decision.** Expand the eval corpus to 16 bulletins, split into two strata: `clear` (10 — bulletins whose body explicitly states applicability) and `adversarial` (6 — designed around specific named failure modes). Every bulletin's frontmatter carries `difficulty` and, where adversarial, `failure_mode`. The eval reports overall + per-stratum precision / recall / F1, and the dashboard surfaces both.
+
+**Why.** The first 10-bulletin run hit precision 1.000 and recall 1.000. A senior reviewer immediately and correctly flagged that as suspicious: the bulletins I authored mostly said things like *"no action required for orchestrators"* in plain English. The classifier wasn't reasoning about relevance — it was extracting an explicit assertion. A perfect score on a corpus where the answer is in the body proves nothing.
+
+**The six adversarial bulletins target named failure modes.** Each is realistic-sounding, sourced to a plausible public Visa program, and engineered to test one specific reasoning failure:
+
+| # | Bulletin | Failure mode tested | Expected label |
+|---|---|---|---|
+| visa-2026-q2-011 | Visa Direct B2C push-payments expansion | `surface_overlap` — mentions tokens/3DS/authorization surfaces Hyperswitch has, but is opt-in for issuer banks doing OCT | not_relevant |
+| visa-2026-q2-012 | Visa Account Updater v3.0 | `wording_trap` — bulletin says "acquirers" throughout, but the operational integration party is the merchant-side card-on-file operator (i.e., Hyperswitch) | relevant |
+| visa-2026-q3-013 | BASE II clearing endpoint TLS migration | `surface_overlap` — mentions "settlement" surface but is pure infrastructure for direct-connected acquirers; orchestrators never touch BASE II | not_relevant |
+| visa-2026-q2-014 | CE 3.0 expansion to in-app digital goods | `optional_but_operationally_required` — formally opt-in, no rule penalty, but the dispute-win-rate math makes it mandatory in practice for orchestrators handling chargebacks for in-app merchants | relevant |
+| visa-2026-q3-015 | UK SCA post-Brexit divergence | `jurisdiction_edge_and_issuer_language` — UK is in Hyperswitch's jurisdiction list, but the bulletin frames the rule as issuer-side; acceptance-side must still surface new exemption flags | relevant |
+| visa-2026-q3-016 | Decline reason code granularity v2 | `surface_mention_but_no_required_change` — explicitly mentions authorization_flow, but the bulletin is unambiguous that consumption is optional with zero penalty for not consuming | not_relevant |
+
+**How the dashboard will read this.** The Eval tab surfaces both the overall row *and* a "Stratified by difficulty" row, with a caption explicitly directing the reviewer: *"the adversarial row is the one that matters."* If the classifier hits 100% on the clear cohort and (say) 67% on adversarial, the headline number drops to ~88% — which is more honest than a misleading 1.000.
+
+**What this rules out.** Cooking the corpus to a target accuracy number. If the classifier turns out to be worse than 80% on the adversarial cohort, that's the result; the dashboard surfaces it and the failure modes go on the roadmap as prompt-engineering or model-upgrade targets.
+
+**Anti-goal.** No retroactive "expected_relevance" relabeling after running the classifier. Labels are set at bulletin-authoring time, in frontmatter, in version control. The eval reports what the model produced against what was labeled — full stop. If the classifier disagrees and the model is right, that's a label bug, surfaced via DECISIONS.md as a separate entry — not by quietly editing the frontmatter.

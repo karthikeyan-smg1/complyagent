@@ -14,6 +14,7 @@ class ClassificationMetrics:
     total: int
     labeled: int
     skipped_unlabeled: int
+    errored: int  # labeled bulletins whose classification raised — excluded from P/R
 
     true_positive: int
     false_positive: int
@@ -36,23 +37,28 @@ def compute_metrics(
 
     expected_label is the frontmatter string ("relevant" / "not_relevant") or
     None when the bulletin is unlabeled — those are skipped.
-    predicted_relevant is the bool Stage-2 output, or None if classification
-    errored (counted as a miss only if the expected label is `relevant`).
+    predicted_relevant is True / False from Stage 2, or None if the
+    classification errored. Errored bulletins are NOT counted toward precision
+    or recall — a quota error is an infrastructure failure, not a model
+    judgement, and crediting it as a correct TN would inflate the metric.
+    They are reported as `errored` so the reviewer sees the true classified
+    sample size.
     """
     tp = fp = tn = fn = 0
     total = 0
     skipped = 0
+    errored = 0
 
     for expected, predicted in pairs:
         total += 1
         if expected not in ("relevant", "not_relevant"):
             skipped += 1
             continue
+        if predicted is None:
+            errored += 1
+            continue
         expected_pos = expected == "relevant"
-        # Failed classifications count against the model: a missed `relevant`
-        # is a false negative, and (charitably) a missed `not_relevant` is a
-        # true negative — declining to act on noise is correct behaviour.
-        predicted_pos = bool(predicted) if predicted is not None else False
+        predicted_pos = bool(predicted)
 
         if expected_pos and predicted_pos:
             tp += 1
@@ -76,6 +82,7 @@ def compute_metrics(
         total=total,
         labeled=labeled,
         skipped_unlabeled=skipped,
+        errored=errored,
         true_positive=tp,
         false_positive=fp,
         true_negative=tn,
