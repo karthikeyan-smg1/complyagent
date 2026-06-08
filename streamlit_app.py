@@ -212,37 +212,38 @@ with tab_overview:
     st.markdown(
         "1. **Ingests bulletins** — curated set of Visa bulletins in v0, "
         "extensible by dropping markdown files into `tenants/<slug>/bulletins/`.\n"
-        "2. **Classifies relevance in two stages** — Gemini 2.5 Flash tags the "
-        "bulletin against a payments taxonomy (network, topic, action type, "
+        "2. **Classifies relevance in two stages** — Gemini 2.5 Flash-Lite tags "
+        "the bulletin against a payments taxonomy (network, topic, action type, "
         "effective date, mandatory yes/no); a second Gemini call decides "
         "whether the bulletin requires code changes in the target codebase, "
         "grounded in a tenant-specific product profile.\n"
-        "3. **Drafts an impact assessment and engineering ticket** — code-RAG "
-        "over the target repo finds the modules likely affected; a third LLM "
-        "call drafts a ticket with severity, deadline, and proposed code-change "
-        "outline. *(v0.2 — not yet shipped in this commit; see Roadmap.)*\n"
-        "4. **Reviews itself** — every classification cites specific language "
-        "from the bulletin and specific surfaces from the product profile; "
-        "this is the eval handle, and the precision/recall numbers at the top "
-        "of this page come from comparing those judgements against a "
-        "hand-labeled ground truth."
+        "3. **Retrieves the affected code** — Voyage `voyage-code-3` embeddings "
+        "over the target codebase, top-k cosine retrieval. The retrieval query "
+        "is built from the Stage-2 reasoning + affected-surface list.\n"
+        "4. **Drafts an impact assessment** — Gemini Stage 3 grounded in the "
+        "retrieved chunks: which files must change, what the change looks like, "
+        "estimated effort.\n"
+        "5. **Scores priority deterministically** — Python rubric from "
+        "`(mandatory, days_until_effective, confidence, affected_file_count, "
+        "estimated_effort)` → P0..P3. No LLM in the priority decision.\n"
+        "6. **Files a GitHub Issue** on the target fork, deduped by bulletin id."
     )
 
     st.markdown("## Pipeline at a glance")
     st.code(
         "Bulletin (markdown + YAML frontmatter)\n"
         "    ↓\n"
-        "Stage 1: Gemini 2.5 Flash — tag (network / topic / action / effective_date / mandatory)\n"
+        "Stage 1: Gemini Flash-Lite — tag (network / topic / action / effective_date / mandatory)\n"
         "    ↓\n"
-        "Stage 2: Gemini 2.5 Flash — relevance vs product profile → {relevant, confidence, reasoning, affected_surfaces}\n"
-        "    ↓ (if relevant — v0.2)\n"
-        "Code RAG: Voyage code embeddings + pgvector → top-k code chunks\n"
+        "Stage 2: Gemini Flash-Lite — relevance vs product profile → {relevant, confidence, reasoning, affected_surfaces}\n"
+        "    ↓ (if relevant)\n"
+        "Code RAG: Voyage voyage-code-3 over the target repo → top-k chunks\n"
         "    ↓\n"
-        "Stage 3: Impact assessment → draft analysis + affected files\n"
+        "Stage 3: Gemini Flash-Lite — impact assessment → {summary, affected_files, suggested_change, effort}\n"
         "    ↓\n"
-        "Priority rubric (deterministic) → P0..P3\n"
+        "Priority rubric (deterministic Python) → P0..P3\n"
         "    ↓\n"
-        "GitHub Issue created on the target repo fork",
+        "GitHub Issue created on the target fork (deduped by bulletin marker)",
         language="text",
     )
 
@@ -372,6 +373,53 @@ with tab_inbox:
                 st.markdown("**Stage-2 reasoning**")
                 reasoning = rec.get("relevance", {}).get("reasoning", "—")
                 st.info(reasoning)
+
+                # Stage 3 — impact + priority + issue (only present for relevant bulletins)
+                impact = rec.get("impact")
+                priority = rec.get("priority")
+                issue = rec.get("issue")
+                if impact:
+                    st.markdown("**Stage-3 impact assessment**")
+                    eff = impact.get("estimated_effort", "—")
+                    p_text = priority.get("priority") if priority else "—"
+                    badge_cols = st.columns([1, 1, 3])
+                    with badge_cols[0]:
+                        st.metric("Priority", p_text)
+                    with badge_cols[1]:
+                        st.metric("Effort", eff)
+                    with badge_cols[2]:
+                        if issue:
+                            url = issue.get("url", "")
+                            num = issue.get("number")
+                            created = issue.get("created")
+                            badge = ("✓ Filed" if created else "= Existing") + f"  #{num}"
+                            st.markdown(f"**GitHub Issue:** [{badge}]({url})")
+                        elif rec.get("issue_error"):
+                            st.warning(f"Issue creation failed: {rec['issue_error']}")
+                    st.markdown(impact.get("impact_summary", "—"))
+                    affected = impact.get("affected_files") or []
+                    if affected:
+                        st.markdown("**Affected files (retrieval-grounded):**")
+                        for f in affected:
+                            line_range = f" (lines `{f.get('line_range','')}`)" if f.get("line_range") else ""
+                            st.markdown(f"- `{f.get('path','—')}`{line_range} — {f.get('rationale','—')}")
+                    st.markdown("**Suggested change:**")
+                    st.info(impact.get("suggested_change", "—"))
+                    if priority:
+                        with st.expander("Why this priority? (deterministic rubric)"):
+                            st.markdown(priority.get("rationale", "—"))
+                            factors = priority.get("factors") or {}
+                            if factors:
+                                st.json(factors)
+                    retrieved = rec.get("retrieved_chunks") or []
+                    if retrieved:
+                        with st.expander(f"Retrieved code chunks (top-{len(retrieved)} from Voyage)"):
+                            for ch in retrieved:
+                                st.markdown(
+                                    f"`{ch.get('line_span','—')}` "
+                                    f"— score {ch.get('score',0):.3f} "
+                                    f"— module `{ch.get('module_path','—')}`"
+                                )
 
                 bulletin_path = PROJECT_ROOT / rec.get("file", "")
                 if bulletin_path.exists():

@@ -153,7 +153,7 @@ class Stage2Result(BaseModel):
 
 
 class CostEntry(BaseModel):
-    stage: Literal["stage1", "stage2"]
+    stage: Literal["stage1", "stage2", "stage3"]
     model: str
     input_tokens: int
     output_tokens: int
