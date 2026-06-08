@@ -22,7 +22,7 @@
 ## 2. Who this is for
 
 - **Primary user (in the demo):** A staff engineer or compliance lead at a payments platform
-- **Real audience for this prototype:** Hiring managers and senior PM interviewers evaluating Karthik's product+technical depth
+- **Real audience for this prototype:** Hiring managers and senior PM interviewers evaluating Karthikeyan's product+technical depth
 
 This is a **portfolio prototype**, not a production system. Decisions favor demonstrating product thinking and shipping speed over scale or enterprise readiness.
 
@@ -30,7 +30,7 @@ This is a **portfolio prototype**, not a production system. Decisions favor demo
 
 ## 3. PM context (who is building this and why)
 
-- **Karthik Subramaniam** — Senior PM at Zuora (Platform Monetisation & Integrations), based in Bengaluru
+- **Karthikeyan Subramaniam** — Senior PM at Zuora (Platform Monetisation & Integrations), based in Bengaluru
 - Previously at **Juspay** (Card Payments Platform), **Twid** (Developer Experience), **LatentView** (Data Products)
 - IIM Calcutta PGDM, B.Tech EEE from Amrita
 - Building this to demonstrate hands-on AI agent + payments domain depth for senior PM roles
@@ -146,7 +146,7 @@ Each phase produces a working artifact. Do not move on until current phase is sh
 
 | Decision | Choice | Why |
 |---|---|---|
-| Target codebase | Hyperswitch (Juspay) | Domain credibility for Karthik, large reputable repo, payments-relevant |
+| Target codebase | Hyperswitch (Juspay) | Domain credibility for Karthikeyan, large reputable repo, payments-relevant |
 | Hosting | Streamlit Cloud (app) + GitHub Actions (cron) + Supabase (DB) | All strictly free tiers — see DECISIONS.md 2026-06-05 (zero-cost stack) |
 | LLM | Gemini 2.5 Flash (both stages on free tier; Pro for Stage-2 when billed) | Zero cost on free tier; Pro 2.5 free-tier limit is 0, so Flash runs both stages by default. 1M+ context window passes full bulletins without aggressive chunking — see DECISIONS.md 2026-06-05 + 2026-06-06 |
 | Scheduler | GitHub Actions cron | Free on public repos; in-repo, version-controlled YAML demos cleanly |
@@ -163,18 +163,18 @@ Each phase produces a working artifact. Do not move on until current phase is sh
 
 ## 9. Working agreement with Claude Code
 
-Karthik is a **senior PM, not an engineer**. The way to work with him:
+Karthikeyan is a **senior PM, not an engineer**. The way to work with him:
 
 1. **Explain before doing.** Before running any non-trivial command or making any non-trivial code change, explain what you're about to do and why in 1–3 sentences. Wait for confirmation on first-time-ever actions; proceed without asking on repeats.
 2. **One step at a time, especially early on.** Don't batch 10 commands. Show the result of step 1 before moving to step 2.
 3. **Teach the mental model, not just the syntax.** When introducing a new tool (uv, Railway CLI, Supabase migrations), give a 2-sentence "what this is and why we're using it" before the command.
 4. **Default to free / open-source.** Never suggest a paid service without flagging it and asking.
 5. **Never commit secrets.** Use `.env`, `.gitignore`, Railway env vars. Set up `.gitignore` correctly from the first commit.
-6. **Small commits, descriptive messages.** Each commit should be a logical unit Karthik can later reference in interviews.
+6. **Small commits, descriptive messages.** Each commit should be a logical unit Karthikeyan can later reference in interviews.
 7. **Update this BRIEF.md when scope or decisions change.** This file is the project memory.
 8. **Maintain a `DECISIONS.md` log** with date-stamped decisions and the reasoning. Interview gold.
-9. **Maintain a `LEARNINGS.md` log** — Karthik writes 2–3 sentences after each session on what he learned. Claude Code prompts for this at session end.
-10. **If a step would take >30 minutes of Karthik's attention, propose breaking it up.** Two-hour focused sessions are the working unit.
+9. **Maintain a `LEARNINGS.md` log** — Karthikeyan writes 2–3 sentences after each session on what he learned. Claude Code prompts for this at session end.
+10. **If a step would take >30 minutes of Karthikeyan's attention, propose breaking it up.** Two-hour focused sessions are the working unit.
 
 ---
 

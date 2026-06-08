@@ -105,7 +105,7 @@ with st.sidebar:
     st.divider()
     st.markdown("##### Author")
     st.markdown(
-        "[Karthik Subramaniam](https://www.linkedin.com/in/karthikeyans/) — "
+        "[Karthikeyan Subramaniam](https://linkedin.com/in/karthikeyan-subramaniam) — "
         "Senior PM portfolio, June 2026"
     )
     st.markdown("[Source on GitHub](https://github.com/karthikeyan-smg1/complyagent)")
@@ -746,7 +746,7 @@ with tab_about:
     st.markdown("## About this artifact")
     st.markdown(
         "ComplyAgent is a portfolio prototype by "
-        "[Karthik Subramaniam](https://www.linkedin.com/in/karthikeyans/), "
+        "[Karthikeyan Subramaniam](https://linkedin.com/in/karthikeyan-subramaniam), "
         "Senior PM at Zuora (ex-Juspay), built over two weekends in June 2026. "
         "Goal: show senior-PM-level product thinking around a real AI-agent "
         "problem space — clear scoping, tenant-shaped architecture from day one, "
@@ -774,5 +774,5 @@ with tab_about:
         "- [Source on GitHub](https://github.com/karthikeyan-smg1/complyagent)\n"
         "- [BRIEF.md — scope and anti-goals](https://github.com/karthikeyan-smg1/complyagent/blob/main/BRIEF.md)\n"
         "- [DECISIONS.md — design rationale](https://github.com/karthikeyan-smg1/complyagent/blob/main/DECISIONS.md)\n"
-        "- [Karthik on LinkedIn](https://www.linkedin.com/in/karthikeyans/)"
+        "- [Karthikeyan on LinkedIn](https://linkedin.com/in/karthikeyan-subramaniam)"
     )

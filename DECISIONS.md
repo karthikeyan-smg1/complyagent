@@ -34,7 +34,7 @@
 
 **Decision.** Replace BRIEF's original Claude (Anthropic API) with Google Gemini — `gemini-2.5-pro` for the relevance and impact-assessment stages, `gemini-2.5-flash` for Stage-1 tagging. Replace BRIEF's original Railway hosting with Streamlit Community Cloud (dashboard) and GitHub Actions cron (scheduled assessment runs). Supabase, Voyage AI, and Langfuse Cloud stay as-is — all on free tiers.
 
-**Constraint driver.** Karthik set a hard zero-cost target for the entire prototype lifecycle. Two BRIEF choices broke this: (a) the Claude Code subscription does not extend API access to a deployed Streamlit app — that requires a separate pay-as-you-go Anthropic API key; (b) Railway no longer offers a perpetual free tier (trial credit only). Both had to move.
+**Constraint driver.** Karthikeyan set a hard zero-cost target for the entire prototype lifecycle. Two BRIEF choices broke this: (a) the Claude Code subscription does not extend API access to a deployed Streamlit app — that requires a separate pay-as-you-go Anthropic API key; (b) Railway no longer offers a perpetual free tier (trial credit only). Both had to move.
 
 **Alternatives considered.**
 
@@ -65,7 +65,7 @@
 
 **Decision.** Phase 1 skateboard and Phase 2 eval are scoped to Visa bulletins only. Mastercard, RBI, and other sources are deferred until after the skateboard proves the riskiest assumption (BRIEF §4). The architecture stays generic — tenant config still lists all card networks, classifier prompts reference "card network" generically, code RAG is network-agnostic. Only the *curated corpus* narrows.
 
-**Reasoning.** Karthik's call: "Run it for Visa only. I will understand it and simply extend to others." Three reasons this is the right move:
+**Reasoning.** Karthikeyan's call: "Run it for Visa only. I will understand it and simply extend to others." Three reasons this is the right move:
 
 1. **Riskiest assumption is network-agnostic.** Whether an LLM can classify regulatory-bulletin relevance to a codebase doesn't change with the issuing network. One network's corpus is sufficient to test the hypothesis.
 2. **Faster sourcing.** Curating 30 Visa bulletins from one source is meaningfully easier than splitting effort across three networks with different document formats.
@@ -166,7 +166,7 @@
 
 **Decision.** Every Gemini call records `prompt_token_count` and `candidates_token_count` from the response's `usage_metadata`; the classifier converts these to a USD estimate using a model-keyed list-price table (`PRICING_USD_PER_MILLION` in `src/classify/classifier.py`). Per-bulletin and per-run costs are written to the eval JSON and displayed in the dashboard. The eval script enforces a **hard per-run USD cap** (`COMPLY_USD_BUDGET`, default $0.50) and aborts mid-run if the cumulative spend reaches the cap.
 
-**Why.** Karthik enabled Gemini billing to lift the 20-RPD free-tier cap, with a stated **monthly budget of INR 100** (~$1.20). Without instrumentation, a misconfigured model swap (e.g., Pro for both stages) could burn the monthly budget in a single eval — Pro is 12× the per-token cost of Flash-Lite. Cost tracking + a per-run cap turn that risk into an aborted run, not a billing surprise.
+**Why.** Karthikeyan enabled Gemini billing to lift the 20-RPD free-tier cap, with a stated **monthly budget of INR 100** (~$1.20). Without instrumentation, a misconfigured model swap (e.g., Pro for both stages) could burn the monthly budget in a single eval — Pro is 12× the per-token cost of Flash-Lite. Cost tracking + a per-run cap turn that risk into an aborted run, not a billing surprise.
 
 **Default cap rationale.** A Flash-Lite full eval (16 bulletins × 2 stages, ~150K tokens) costs ~$0.02. Flash costs ~$0.06. Pro-on-Stage-2 costs ~$0.15. The $0.50 default leaves 3× headroom for the most expensive Pro run while hard-stopping any runaway.
 
