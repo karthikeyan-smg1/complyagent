@@ -682,22 +682,45 @@ with tab_design:
 # ----------------------------------------------------------------------------
 
 with tab_roadmap:
-    st.markdown("## v0.2 — closing the agent loop")
+    st.markdown("## v0.2 — agent loop closed ✓")
     st.markdown(
-        "The current shipped slice classifies relevance. The next slice closes "
-        "the loop end-to-end:\n\n"
-        "1. **Code RAG over Hyperswitch** — chunk the target repo by Rust "
-        "module boundary, embed via Voyage `voyage-code-3`, store in Supabase "
-        "pgvector keyed on `(tenant_id, commit_sha)`.\n"
-        "2. **Impact assessment LLM call** — bulletin + retrieved code chunks "
-        "→ draft analysis + affected files list.\n"
-        "3. **Deterministic priority rubric** — score from {mandatory yes/no, "
-        "effective date proximity, affected-surface coverage} → P0..P3.\n"
-        "4. **GitHub Issue created** on the Hyperswitch fork, populated with "
-        "the impact draft, surface list, deadline, and proposed code-change "
-        "outline. The dashboard surfaces issue links per bulletin.\n"
-        "5. **GitHub Actions cron** runs the full pipeline weekly; commits "
-        "refreshed `latest-eval.json` and the new issue references."
+        "The end-to-end loop is shipped as of 2026-06-08:\n\n"
+        "1. **Code RAG over Hyperswitch** ✓ — chunked the full Rust workspace "
+        "(3,706 chunks across 1,804 files), embedded via Voyage "
+        "`voyage-code-3`, persisted as a local parquet index. Cosine top-k "
+        "retrieval per bulletin.\n"
+        "2. **Impact assessment LLM call** ✓ — Gemini Stage 3 grounded in "
+        "the retrieved chunks, returning structured `{impact_summary, "
+        "affected_files, suggested_change, estimated_effort}` via Pydantic "
+        "response_schema.\n"
+        "3. **Deterministic priority rubric** ✓ — Python from `(mandatory, "
+        "days_until_effective, confidence, affected_file_count, "
+        "estimated_effort)` → P0..P3. No LLM in the priority decision.\n"
+        "4. **GitHub Issues filed** ✓ — real issues on the "
+        "[Hyperswitch fork](https://github.com/karthikeyan-smg1/hyperswitch/issues), "
+        "deduped by bulletin-id marker in the body. Inspect the "
+        "**Bulletin inbox** tab to see per-bulletin issue links + impact "
+        "+ priority.\n\n"
+        "**First end-to-end agent run on 16 bulletins:** 8 relevant → 8 "
+        "GitHub Issues filed (0 already existing). 94s wall-clock. "
+        "**₹2.01 total spend.**"
+    )
+
+    st.markdown("## v0.3 and beyond")
+    st.markdown(
+        "- **GitHub Actions cron** runs the full pipeline weekly; commits "
+        "refreshed `latest-eval.json` and any new issue references.\n"
+        "- **Real Visa Business News bulletins** instead of synthesized — "
+        "validates the classifier on actual industry language, not the "
+        "author's interpretation of it.\n"
+        "- **Cross-network sanity** — does a Visa-tuned classifier "
+        "confabulate or fail loudly on a Mastercard or RBI bulletin?\n"
+        "- **Calibration** — confidence is currently saturated at 1.00 on "
+        "every call. A calibrated model would let the priority rubric "
+        "de-escalate low-confidence judgements instead of relying on the "
+        "hard 0.6 threshold.\n"
+        "- **Multi-tenant + auth** — see the SaaS / on-prem blueprint "
+        "below."
     )
 
     st.markdown("## Scaling — what the SaaS / on-prem extension looks like")
